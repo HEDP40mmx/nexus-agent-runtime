@@ -1,21 +1,51 @@
 name: Nexus background runner
 
 on:
-  schedule:
-    # Run every hour at the top of the hour
-    - cron: '0 * * * *'
   workflow_dispatch:
+  schedule:
+    - cron: "17 */ * * *"
+
+permissions:
+  contents: read
 
 jobs:
-  nexus-validation:
+  health-check:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+
     steps:
-      - name: Checkout code
+      - name: Check out Nexus
         uses: actions/checkout@v4
-      
-      - name: Run Nexus validation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
         run: |
-          echo "Starting Nexus validation..."
-          # Add your Nexus validation command here
-          # Example: nexus validate
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -f pyproject.toml ]; then
+            pip install -e ".[test]" || pip install -e .
+          fi
+
+      - name: Run validation
+        run: |
+          if [ -d tests ]; then
+            python -m pytest -q
+          else
+            python -m compileall -q .
+          fi
+
+      - name: Write run summary
+        if: always()
+        run: |
+          {
+            echo "## Nexus runner result"
+            echo "- Repository: $GITHUB_REPOSITORY"
+            echo "- Commit: $GITHUB_SHA"
+            echo "- UTC time: $(date -u '+%Y-%m-%d %H:%M:%S')"
+          } >> "$GITHUB_STEP_SUMMARY"
