@@ -1,0 +1,54 @@
+name: Daily backup
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Fetch all branches and tags
+        run: |
+          git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          git fetch --tags origin
+          for b in $(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | grep -v '^HEAD$'); do
+            git branch --force "$b" "origin/$b" 2>/dev/null || true
+          done
+      - name: Create and verify bundle
+        run: |
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          git bundle create "nexus-${stamp}.bundle" --all
+          scripts/verify_bundle_restore.sh "nexus-${stamp}.bundle"
+          sha256sum nexus-*.bundle > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-git-bundle
+          path: |
+            nexus-*.bundle
+            SHA256SUMS
+          retention-days: 30
+      - name: Push to independent backup (non-force, no deletions)
+        env:
+          BACKUP_REPO_URL: ${{ secrets.BACKUP_REPO_URL }}
+          BACKUP_SSH_KEY: ${{ secrets.BACKUP_SSH_KEY }}
+        run: |
+          if [ -z "${BACKUP_REPO_URL:-}" ] || [ -z "${BACKUP_SSH_KEY:-}" ]; then
+            echo "::warning::BACKUP_REPO_URL/BACKUP_SSH_KEY not configured; only a 30-day Actions artifact exists. NOT an independent backup."
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$BACKUP_SSH_KEY" > ~/.ssh/backup_key; chmod 600 ~/.ssh/backup_key
+          ssh-keyscan -H "$(echo "$BACKUP_REPO_URL" | sed -E 's#^(ssh://)?[^@]+@([^:/]+).*#\2#')" >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/backup_key -o IdentitiesOnly=yes"
+          git remote add backup "$BACKUP_REPO_URL"
+          git push backup 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'

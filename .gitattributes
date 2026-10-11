@@ -1,0 +1,9 @@
+# Excluded from `git archive` (public release packages)
+.github/ export-ignore
+.env* export-ignore
+*.pem export-ignore
+*.key export-ignore
+*.sqlite export-ignore
+*.sqlite3 export-ignore
+*.db export-ignore
+.nexus-runner-write-proof.md export-ignore
