@@ -1,0 +1,3 @@
+include nexus/schema.sql
+include docs/NEXUS_V1.md
+recursive-include tests *.py

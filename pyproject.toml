@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "nexus-agent-runtime"
+version = "1.0.0a1"
+description = "Single-host durable workflow runtime with operator controls"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+[project.scripts]
+nexus = "nexus.cli:main"
+[tool.setuptools.packages.find]
+include = ["nexus*"]
+[tool.setuptools.package-data]
+nexus = ["schema.sql"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+xfail_strict = true
