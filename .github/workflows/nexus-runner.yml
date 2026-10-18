@@ -6,7 +6,7 @@ on:
     - cron: "17 * * * *"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   health-check:
@@ -16,35 +16,15 @@ jobs:
     steps:
       - name: Check out Nexus
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Prove repository write access
+      - name: Prove repository read access
         shell: bash
         run: |
           set -euo pipefail
-          proof_file=".nexus-runner-write-proof.md"
-
-          cat > "$proof_file" <<'EOF'
-          # Nexus runner write proof
-
-          Created by `.github/workflows/nexus-runner.yml` to verify that this
-          GitHub Actions workflow can create and commit a repository file.
-          EOF
-
-          git add -- "$proof_file"
-
-          if git diff --cached --quiet -- "$proof_file"; then
-            proof_commit="$(git log -1 --format=%H -- "$proof_file")"
-            echo "Proof file is unchanged; no commit created. Latest proof commit: ${proof_commit:-none}"
-          else
-            git -c user.name="github-actions[bot]" \
-                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-                commit -m "ci: prove runner repository write"
-
-            proof_commit="$(git rev-parse HEAD)"
-            echo "Created proof commit: $proof_commit"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-            echo "Pushed proof commit to ${GITHUB_REF_NAME}"
-          fi
+          git cat-file -e "${GITHUB_SHA}^{commit}"
+          echo "Read access verified: $GITHUB_REPOSITORY at $(git rev-parse HEAD)" > "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Python
         uses: actions/setup-python@v5
