@@ -5,3 +5,6 @@ from .models import (ActionContext, Conflict, InvalidSpec, LeaseLost, NotFound,
                      StepSpec, StorageBusy, StorageError)
 from .store import Store
 from .service import Nexus
+from .registry import Registry
+from .engine import Engine
+from .worker import Worker
