@@ -4,7 +4,7 @@ Recorded 2026-10-23 for branch `manus/nexus-v1-complete-20261023`.
 
 ## Repository and commits
 
-The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current head is `97974a9639bcc89cf3a00cc0ac9c94c30b8b247b`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
+The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The implementation head is `97974a9639bcc89cf3a00cc0ac9c94c30b8b247b`; the final documentation head is `f7f302f3e9d5e3e4479c7fd10119302f1e7c2cb8`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
 
 The branch contains the imported checkpoint as `794e998`, the registry/engine/worker milestone as `8043a6d`, and approval/cancellation controls as `97974a9`.
 
@@ -12,7 +12,7 @@ The branch contains the imported checkpoint as `794e998`, the registry/engine/wo
 
 Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. After the engine milestone, the full suite passed 80 tests. After approval and cancellation controls, the full suite passed 83 tests, including 3 new control tests. `pip check`, the required-file safeguard, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
 
-Hosted CI run `40001799576` failed at the pre-import head `3659cff` because the required package paths were absent at that historical commit. A new CI run was queued for head `8043a6d` at the time of this report; its final conclusion must be checked before treating hosted validation as complete. No hosted result is claimed here for head `97974a9`.
+Hosted CI run `40001799576` failed at the pre-import head `3659cff` because the required package paths were absent at that historical commit. Hosted CI run `40002328861` succeeded at head `8043a6d`, and hosted CI run `40002530774` succeeded at head `97974a9`. The later documentation-only head `f7f302f` has not had a separate hosted run recorded; the implementation code is unchanged after the successful implementation run.
 
 ## Requirement status
 
