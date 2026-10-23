@@ -73,3 +73,45 @@ class Nexus:
             for row in self.db.execute("SELECT * FROM events WHERE run_id=? AND event_id>? ORDER BY event_id LIMIT ?", (run_id, after, limit)):
                 e = dict(row); e["payload"] = json.loads(e.pop("payload_json")); result.append(e)
             return result
+
+    def decide(self, approval_id, decision, principal):
+        identifier(approval_id, "approval id")
+        if decision not in ("approved", "denied") or not isinstance(principal, str) or not principal:
+            raise InvalidSpec("invalid approval decision")
+        with self.store.tx():
+            approval = self.db.execute("SELECT * FROM approvals WHERE approval_id=?", (approval_id,)).fetchone()
+            if approval is None:
+                raise NotFound("Approval not found")
+            now = self.store.now_ms()
+            if approval["decision"] == decision:
+                return dict(approval)
+            if approval["decision"] != "pending" or now >= approval["expires_ms"]:
+                raise Conflict("approval is no longer decidable")
+            self.db.execute("UPDATE approvals SET decision=?,decided_ms=?,decided_by=? WHERE approval_id=?",
+                            (decision, now, principal, approval_id))
+            status = "queued" if decision == "approved" else "failed"
+            error = None if decision == "approved" else "APPROVAL_DENIED"
+            self.db.execute("""UPDATE runs SET status=?,error_code=?,ready_at_ms=?,updated_ms=?
+                WHERE run_id=? AND status='waiting_approval'""",
+                            (status, error, now, now, approval["run_id"]))
+            self.db.execute("""UPDATE steps SET status=?,error_code=? WHERE run_id=? AND step_id=?
+                AND status='waiting_approval'""", ("pending" if decision == "approved" else "failed", error,
+                                                     approval["run_id"], approval["step_id"]))
+            self.store.event(approval["run_id"], "approval_decided", now,
+                             {"approval_id": approval_id, "decision": decision, "principal": principal}, approval["step_id"])
+            return dict(self.db.execute("SELECT * FROM approvals WHERE approval_id=?", (approval_id,)).fetchone())
+
+    def cancel(self, run_id, principal):
+        if not isinstance(principal, str) or not principal:
+            raise InvalidSpec("principal is required")
+        with self.store.tx():
+            run = self._run(run_id)
+            if run["status"] in TERMINAL:
+                return dict(run)
+            now = self.store.now_ms()
+            self.db.execute("""UPDATE runs SET status='cancelled',lease_epoch=lease_epoch+1,lease_owner=NULL,
+                lease_until_ms=NULL,error_code='CANCELLED',updated_ms=? WHERE run_id=?""", (now, run_id))
+            self.db.execute("""UPDATE steps SET status='cancelled',error_code='CANCELLED' WHERE run_id=?
+                AND status NOT IN ('succeeded','failed','cancelled')""", (run_id,))
+            self.store.event(run_id, "run_cancelled", now, {"principal": principal})
+            return dict(self._run(run_id))

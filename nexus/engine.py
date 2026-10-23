@@ -34,12 +34,33 @@ class Engine:
         with self.store.tx():
             row = self.db.execute("""SELECT r.*, s.step_id, s.kind, s.status step_status,
                     s.action_name, s.action_version, s.input_json, s.timeout_ms,
-                    s.effect_digest, s.attempts_started, s.max_attempts
+                    s.effect_digest, s.require_approval, s.approval_ttl_ms,
+                    s.attempts_started, s.max_attempts
                 FROM runs r JOIN steps s ON s.run_id=r.run_id AND s.ordinal=r.next_step
                 WHERE r.status IN ('queued','retry_wait') AND r.ready_at_ms<=?
                 ORDER BY r.ready_at_ms,r.created_ms,r.run_id LIMIT 1""", (now,)).fetchone()
             if row is None:
                 return None
+            if row["kind"] == "action" and row["require_approval"]:
+                approval = self.db.execute("SELECT * FROM approvals WHERE run_id=? AND step_id=?",
+                                           (row["run_id"], row["step_id"])).fetchone()
+                if approval is None or approval["decision"] == "pending":
+                    if approval is not None and now >= approval["expires_ms"]:
+                        self.db.execute("UPDATE approvals SET decision='expired',decided_ms=?,decided_by='system' WHERE approval_id=?",
+                                        (now, approval["approval_id"]))
+                    approval_id = uuid.uuid4().hex
+                    if approval is None:
+                        self.db.execute("""INSERT INTO approvals(approval_id,run_id,step_id,effect_digest,
+                            decision,created_ms,expires_ms) VALUES (?,?,?,?,'pending',?,?)""",
+                                        (approval_id, row["run_id"], row["step_id"], row["effect_digest"],
+                                         now, now + row["approval_ttl_ms"]))
+                    self.db.execute("""UPDATE runs SET status='waiting_approval',lease_owner=NULL,
+                        lease_until_ms=NULL,updated_ms=? WHERE run_id=?""", (now, row["run_id"]))
+                    self.db.execute("UPDATE steps SET status='waiting_approval' WHERE run_id=? AND step_id=?",
+                                    (row["run_id"], row["step_id"]))
+                    self.store.event(row["run_id"], "approval_requested", now,
+                                     {"approval_id": approval_id}, row["step_id"])
+                    return None
             epoch = row["lease_epoch"] + 1
             until = now + self.lease_ms
             self.db.execute("""UPDATE runs SET status='running', lease_owner=?, lease_epoch=?,
