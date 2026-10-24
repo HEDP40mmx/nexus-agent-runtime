@@ -1,5 +1,7 @@
 """Durable workflow transitions for claims, attempts, retries and fencing."""
 from dataclasses import dataclass
+import sqlite3
+import threading
 import uuid
 from .models import (ActionContext, LeaseLost, PermanentError, RetryableError,
                      TERMINAL, digest, canonical)
@@ -24,11 +26,14 @@ class Claim:
 
 
 class Engine:
-    def __init__(self, store, registry=None, lease_ms=LEASE_MS):
+    def __init__(self, store, registry=None, lease_ms=LEASE_MS, heartbeat_interval_ms=None):
         self.store = store
         self.db = store.db
         self.registry = registry
         self.lease_ms = lease_ms
+        self.heartbeat_interval_ms = heartbeat_interval_ms or max(1, lease_ms // 6)
+        if self.heartbeat_interval_ms >= lease_ms:
+            raise ValueError("heartbeat interval must be shorter than lease duration")
 
     def _claim_row(self, owner=None):
         now = self.store.now_ms()
@@ -223,10 +228,26 @@ class Engine:
         try:
             handler = self.registry.require(claim.action, claim.version)
             claim = self.allocate_attempt(claim)
-            result = handler(claim.input, ActionContext(claim.run_id, claim.step_id, claim.attempt_no,
-                                                        claim.epoch, claim.effect_key))
+            stop = threading.Event()
+            lost = threading.Event()
+            heartbeat = threading.Thread(target=self._heartbeat_loop,
+                                         args=(claim, stop, lost),
+                                         name="nexus-heartbeat", daemon=True)
+            heartbeat.start()
+            try:
+                result = handler(claim.input, ActionContext(claim.run_id, claim.step_id, claim.attempt_no,
+                                                            claim.epoch, claim.effect_key))
+                if lost.is_set():
+                    raise LeaseLost("lease renewal was lost during action execution")
+            finally:
+                stop.set()
+                heartbeat.join(timeout=max(0.1, self.heartbeat_interval_ms / 1000 * 2))
             canonical(result)
             self.succeed(claim, result)
+        except LeaseLost:
+            # Never convert a stale action into a committed result. Reconciliation
+            # owns the still-running durable attempt after the lease expires.
+            return True
         except KeyError as exc:
             self.fail(claim, PermanentError("UNKNOWN_ACTION"), False)
         except RetryableError as exc:
@@ -234,6 +255,38 @@ class Engine:
         except BaseException as exc:
             self.fail(claim, exc, False)
         return True
+
+    def _heartbeat_loop(self, claim, stop, lost):
+        conn = None
+        try:
+            # The action thread must not share the Store connection. This
+            # connection is opened in the heartbeat thread and is closed there.
+            conn = sqlite3.connect(self.store.path, autocommit=True, timeout=5.0)
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA busy_timeout=5000")
+            while not stop.wait(self.heartbeat_interval_ms / 1000):
+                now = self.store.now_ms()
+                try:
+                    conn.execute("BEGIN IMMEDIATE")
+                    cur = conn.execute("""UPDATE runs SET lease_until_ms=?,updated_ms=?
+                        WHERE run_id=? AND status='running' AND lease_owner=? AND lease_epoch=?
+                        AND lease_until_ms>?""", (now + self.lease_ms, now, claim.run_id,
+                                                     claim.owner, claim.epoch, now))
+                    if cur.rowcount != 1:
+                        conn.execute("ROLLBACK")
+                        lost.set()
+                        return
+                    conn.execute("COMMIT")
+                except BaseException:
+                    if conn.in_transaction:
+                        conn.execute("ROLLBACK")
+                    lost.set()
+                    return
+        except BaseException:
+            lost.set()
+        finally:
+            if conn is not None:
+                conn.close()
 
     @staticmethod
     def _assert_lease(row, claim, now):

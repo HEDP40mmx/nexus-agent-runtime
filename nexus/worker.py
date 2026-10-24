@@ -5,8 +5,10 @@ from .engine import Engine
 
 
 class Worker:
-    def __init__(self, store, registry, *, poll_interval=0.1, lease_ms=30_000):
-        self.engine = Engine(store, registry, lease_ms=lease_ms)
+    def __init__(self, store, registry, *, poll_interval=0.1, lease_ms=30_000,
+                 heartbeat_interval_ms=None):
+        self.engine = Engine(store, registry, lease_ms=lease_ms,
+                             heartbeat_interval_ms=heartbeat_interval_ms)
         self.poll_interval = poll_interval
         self.stop_event = threading.Event()
 

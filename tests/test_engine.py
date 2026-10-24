@@ -1,5 +1,6 @@
+import time
 import pytest
-from nexus import Engine, Registry, RetryableError, StepSpec, RunSpec
+from nexus import Engine, Nexus, Registry, RetryableError, StepSpec, RunSpec, Store
 
 
 def test_registered_action_completes_run(env):
@@ -63,3 +64,19 @@ def test_stale_owner_cannot_finish_after_epoch_replacement(env):
         Engine(store, registry, lease_ms=5).heartbeat(first)
     assert exc.value.code == "LEASE_LOST"
     assert api.get_run(run_id)["status"] == "running"
+
+
+def test_background_heartbeat_keeps_long_action_lease(tmp_path):
+    with Store(tmp_path / "heartbeat.sqlite") as store:
+        api = Nexus(store)
+
+        def slow(value, ctx):
+            time.sleep(0.15)
+            return {"done": True}
+
+        registry = Registry().register("slow", "1", slow)
+        run_id = api.submit(RunSpec((StepSpec.action(id="a", action="slow", version="1", input={}),)),
+                            "req-heartbeat")
+        engine = Engine(store, registry, lease_ms=40, heartbeat_interval_ms=5)
+        assert engine.execute_once() is True
+        assert api.get_run(run_id)["status"] == "succeeded"
