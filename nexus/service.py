@@ -115,3 +115,36 @@ class Nexus:
                 AND status NOT IN ('succeeded','failed','cancelled')""", (run_id,))
             self.store.event(run_id, "run_cancelled", now, {"principal": principal})
             return dict(self._run(run_id))
+
+    def signal(self, run_id, name, message_id, payload):
+        identifier(run_id, "run id")
+        identifier(name, "signal name")
+        identifier(message_id, "message id")
+        payload_json = canonical(payload)
+        payload_digest = digest({"name": name, "payload": payload})
+        with self.store.tx():
+            run = self._run(run_id)
+            if run["status"] in TERMINAL:
+                raise Conflict("Cannot signal a terminal run")
+            old = self.db.execute("SELECT * FROM signals WHERE run_id=? AND message_id=?",
+                                  (run_id, message_id)).fetchone()
+            if old:
+                if old["name"] != name or old["payload_digest"] != payload_digest:
+                    raise Conflict("Message id already binds different content")
+                return dict(old)
+            now = self.store.now_ms()
+            self.db.execute("""INSERT INTO signals(run_id,message_id,name,payload_json,payload_digest,created_ms)
+                VALUES (?,?,?,?,?,?)""", (run_id, message_id, name, payload_json, payload_digest, now))
+            self.store.event(run_id, "signal_received", now,
+                             {"message_id": message_id, "name": name})
+            if run["status"] == "waiting_signal":
+                step = self.db.execute("""SELECT * FROM steps WHERE run_id=? AND ordinal=?
+                    AND kind='wait_signal' AND status='waiting_signal'""",
+                                       (run_id, run["next_step"])).fetchone()
+                if step is not None and step["signal_name"] == name:
+                    self.db.execute("UPDATE runs SET status='queued',ready_at_ms=?,updated_ms=? WHERE run_id=?",
+                                    (now, now, run_id))
+                    self.db.execute("UPDATE steps SET status='pending' WHERE run_id=? AND step_id=?",
+                                    (run_id, step["step_id"]))
+            return dict(self.db.execute("""SELECT * FROM signals WHERE run_id=? AND message_id=?""",
+                                        (run_id, message_id)).fetchone())

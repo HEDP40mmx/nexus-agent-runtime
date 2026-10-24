@@ -19,6 +19,8 @@ class Claim:
     version: str | None
     input: dict
     effect_key: str | None
+    kind: str = "action"
+    signal_name: str | None = None
 
 
 class Engine:
@@ -33,7 +35,7 @@ class Engine:
         owner = owner or uuid.uuid4().hex
         with self.store.tx():
             row = self.db.execute("""SELECT r.*, s.step_id, s.kind, s.status step_status,
-                    s.action_name, s.action_version, s.input_json, s.timeout_ms,
+                    s.action_name, s.action_version, s.signal_name, s.input_json, s.timeout_ms,
                     s.effect_digest, s.require_approval, s.approval_ttl_ms,
                     s.attempts_started, s.max_attempts
                 FROM runs r JOIN steps s ON s.run_id=r.run_id AND s.ordinal=r.next_step
@@ -71,7 +73,7 @@ class Engine:
             self.store.event(row["run_id"], "lease_claimed", now,
                              {"owner": owner, "lease_epoch": epoch}, row["step_id"])
             return self.db.execute("""SELECT r.*, s.step_id, s.kind, s.status step_status,
-                    s.action_name, s.action_version, s.input_json, s.timeout_ms,
+                    s.action_name, s.action_version, s.signal_name, s.input_json, s.timeout_ms,
                     s.effect_digest, s.attempts_started, s.max_attempts
                 FROM runs r JOIN steps s ON s.run_id=r.run_id AND s.ordinal=r.next_step
                 WHERE r.run_id=?""", (row["run_id"],)).fetchone()
@@ -85,7 +87,41 @@ class Engine:
                      None, row["timeout_ms"], row["action_name"], row["action_version"],
                      json.loads(row["input_json"]),
                      "nexus-v1:" + digest({"run_id": row["run_id"], "step_id": row["step_id"],
-                                              "effect_digest": row["effect_digest"]}))
+                                              "effect_digest": row["effect_digest"]}),
+                     row["kind"], row["signal_name"])
+
+    def consume_signal(self, claim):
+        now = self.store.now_ms()
+        with self.store.tx():
+            run = self.db.execute("SELECT * FROM runs WHERE run_id=?", (claim.run_id,)).fetchone()
+            self._assert_lease(run, claim, now)
+            signal = self.db.execute("""SELECT * FROM signals WHERE run_id=? AND name=?
+                AND consumed_by_step_id IS NULL ORDER BY seq LIMIT 1""",
+                                     (claim.run_id, claim.signal_name)).fetchone()
+            if signal is None:
+                self.db.execute("UPDATE steps SET status='waiting_signal' WHERE run_id=? AND step_id=?",
+                                (claim.run_id, claim.step_id))
+                self.db.execute("""UPDATE runs SET status='waiting_signal',lease_owner=NULL,
+                    lease_until_ms=NULL,updated_ms=? WHERE run_id=?""", (now, claim.run_id))
+                self.store.event(claim.run_id, "signal_waiting", now,
+                                 {"name": claim.signal_name}, claim.step_id)
+                return False
+            self.db.execute("""UPDATE signals SET consumed_by_step_id=?,consumed_ms=?
+                WHERE seq=? AND consumed_by_step_id IS NULL""",
+                            (claim.step_id, now, signal["seq"]))
+            self.db.execute("UPDATE steps SET status='succeeded',result_json=? WHERE run_id=? AND step_id=?",
+                            (signal["payload_json"], claim.run_id, claim.step_id))
+            nxt = run["next_step"] + 1
+            count = self.db.execute("SELECT count(*) FROM steps WHERE run_id=?", (claim.run_id,)).fetchone()[0]
+            status = "succeeded" if nxt >= count else "queued"
+            self.db.execute("""UPDATE runs SET status=?,next_step=?,lease_owner=NULL,
+                lease_until_ms=NULL,ready_at_ms=?,updated_ms=? WHERE run_id=?""",
+                            (status, nxt, now, now, claim.run_id))
+            self.store.event(claim.run_id, "signal_consumed", now,
+                             {"message_id": signal["message_id"], "name": signal["name"]}, claim.step_id)
+            if status == "succeeded":
+                self.store.event(claim.run_id, "run_succeeded", now, {})
+            return True
 
     def allocate_attempt(self, claim):
         now = self.store.now_ms()
@@ -179,6 +215,8 @@ class Engine:
         claim = self.claim()
         if claim is None:
             return False
+        if claim.kind == "wait_signal":
+            return self.consume_signal(claim)
         if claim.action is None:
             self.fail(claim, PermanentError("wait_signal not yet implemented"), False)
             return True
