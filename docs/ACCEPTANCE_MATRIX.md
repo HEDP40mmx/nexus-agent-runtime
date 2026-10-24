@@ -1,6 +1,6 @@
 # Nexus acceptance matrix
 
-Updated for PR #5 head `c42108484b586d0fe6d15bdef4bb79ae07fe7a4f` on 2026-10-23. Local Python 3.12 suite: 96 passed; compilation, packaging, installed wheel/sdist smoke, and `git diff --check` passed. Hosted CI run `40069740375` passed for this exact head.
+Updated for PR #5 head `2b87426cd6b14eeb9c5ab52075dd5f36346a2966` on 2026-10-23. Local Python 3.12 suite: 98 passed; compilation and `git diff --check` passed. The role/rate-limit implementation head is awaiting its own hosted CI run.
 
 | Gate | Status | Evidence or remaining gap |
 |---|---|---|
@@ -20,14 +20,16 @@ Updated for PR #5 head `c42108484b586d0fe6d15bdef4bb79ae07fe7a4f` on 2026-10-23.
 | Process-group/descendant cleanup | implemented and tested locally | Descendant sleep process qualification |
 | Child protocol output bound | implemented and tested locally | Oversized-result qualification; stderr channel not separately implemented |
 | Authenticated HTTP control endpoints | implemented and tested locally | Localhost bearer-token adapter and structured errors |
-| HTTP TLS, operator roles, rate limits | not implemented | Current adapter is localhost-oriented bearer auth only |
+| Role-based authorization | implemented and tested locally | Independent reader/operator/admin tokens; reader is read-only; audit principal comes from matched role |
+| Per-client rate limiting and request bounds | implemented and tested locally | Sliding-window 429 limiter, bounded handler concurrency, socket timeout, 64 KiB body limit |
+| HTTP TLS and external/public deployment security | not implemented | Must remain localhost-only or sit behind a properly secured TLS reverse proxy |
 | Full CLI worker/serve/preflight/demo | partially implemented | Existing CLI; worker/serve/demo/preflight completeness remains |
 | Online backup and fresh restore | implemented and tested locally | Existing backup tests; broader concurrent-write rehearsal remains |
 | Packaging and installed-package qualification | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
 | Delegation, memory, capabilities, budgets, secrets, telemetry | not implemented | Product slices remain |
 | Full X01-X16 / 31+16 gates | not complete | Several product and deployment gates remain |
-| Hosted CI for final head | verified in hosted CI | Run `40069740375` passed for exact `c421084` head |
+| Hosted CI for final head | pending | Must query the run for exact `2b87426` head |
 
 ## Unsupported guarantees
 
-The supervised boundary is a trusted same-user process boundary, not hostile-code sandboxing. The implementation does not claim exactly-once external effects, power-loss safety, TLS/operator-role security, distributed scale, or production readiness. Fork-based supervision currently emits Python’s warning when the parent is multithreaded; this needs a safer process-launch design before production use.
+The supervised boundary is a trusted same-user process boundary, not hostile-code sandboxing. The implementation does not claim exactly-once external effects, power-loss safety, TLS, distributed scale, or production readiness. Role authentication and local rate limiting are now implemented, but token rotation, persistent auth-file management, authentication-failure metrics, and reverse-proxy deployment hardening remain future work. Fork-based supervision currently emits Python’s warning when the parent is multithreaded; this needs a safer process-launch design before production use.

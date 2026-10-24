@@ -4,15 +4,15 @@ Recorded 2026-10-23 for branch `manus/nexus-v1-complete-20261023`.
 
 ## Repository and commits
 
-The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current head is `c42108484b586d0fe6d15bdef4bb79ae07fe7a4f`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
+The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current implementation head is `2b87426cd6b14eeb9c5ab52075dd5f36346a2966`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
 
 The branch contains the imported checkpoint as `794e998`, the registry/engine/worker milestone as `8043a6d`, approval/cancellation controls as `97974a9`, durable signals as `326039e`, supervised execution/provenance as `b32de44`, and HTTP/reconciliation controls as `e9b86e8`.
 
 ## Validation actually performed
 
-Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. The current full suite passes 96 tests, including signal, heartbeat, worker-kill/recovery, supervised timeout/process-tree cleanup, and authenticated HTTP tests. `pip check`, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
+Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. The current full suite passes 98 tests, including signal, heartbeat, worker-kill/recovery, supervised timeout/process-tree cleanup, role authorization, and rate-limit tests. `pip check`, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
 
-Hosted CI run `40069740375` succeeded at the current head `c421084`; runs `40069712401` and `40069513701` also succeeded at the preceding implementation heads. The pre-import failure `40001799576` is historical and not used as current evidence.
+Hosted CI run `40069740375` succeeded at the preceding implementation head `c421084`; the role/rate-limit head `2b87426` is awaiting its own hosted run. The pre-import failure `40001799576` is historical and not used as current evidence.
 
 ## Requirement status
 
@@ -26,7 +26,8 @@ Hosted CI run `40069740375` succeeded at the current head `c421084`; runs `40069
 | Supervised child processes and bounded protocol | implemented and tested locally | `nexus/supervisor.py`, timeout/output/process-tree tests; trusted same-user boundary only |
 | Approvals and cancellation | implemented and tested locally | `nexus/service.py`, `tests/test_controls.py`; expiry/mismatch races remain |
 | Durable signals and consuming waits | implemented and tested locally | FIFO consumption, replay/conflict handling, early delivery, and wait wake-up |
-| HTTP API and bearer authentication | implemented and tested locally | `nexus/api.py`; localhost-only, no TLS/roles/rate limits |
+| HTTP API and bearer authentication | implemented and tested locally | `nexus/api.py`; localhost-only bearer authentication with structured errors |
+| HTTP roles and rate limiting | implemented and tested locally | Reader/operator/admin hierarchy, constant-time token matching, per-client sliding-window 429 limiter, bounded concurrency and socket timeout |
 | Complete CLI, preflight and offline demo | partially implemented | Checkpoint CLI only; worker/serve/preflight/demo remain |
 | Delegation, scoped memory, capabilities, budgets, secrets, telemetry | not implemented | Planned follow-up slices |
 | Packaging | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
@@ -36,6 +37,6 @@ Hosted CI run `40069740375` succeeded at the current head `c421084`; runs `40069
 
 ## Known defects and safety boundaries
 
-Actions now run through a bounded trusted same-user child protocol with timeout and process-group cleanup. Automatic renewal runs on a separate SQLite connection, and worker polling schedules expired-lease reconciliation. The fork-based launcher emits Python’s warning when forking from a multithreaded parent and needs a safer production launch design. The HTTP adapter is localhost-only bearer auth; TLS, operator roles, rate limits, and broader API qualification remain unfinished. Approval expiry/races, complete CLI/preflight/demo, deployment, delegation, memory, capabilities, budgets, secrets, telemetry, and complete-product gates remain unfinished.
+Actions now run through a bounded trusted same-user child protocol with timeout and process-group cleanup. Automatic renewal runs on a separate SQLite connection, and worker polling schedules expired-lease reconciliation. The fork-based launcher emits Python’s warning when forking from a multithreaded parent and needs a safer production launch design. The HTTP adapter now has local role-based bearer authentication, per-client rate limiting, bounded request concurrency, socket timeouts, and 64 KiB request limits; it remains localhost-only and lacks TLS, token rotation/auth-file management, and persistent authentication-failure metrics. Approval expiry/races, complete CLI/preflight/demo, deployment, delegation, memory, capabilities, budgets, secrets, telemetry, and complete-product gates remain unfinished.
 
 Do not interpret the local test count as proof of exactly-once external effects, power-loss safety, hostile-code isolation, hosted CI success, or production readiness.
