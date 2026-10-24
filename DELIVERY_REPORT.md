@@ -4,7 +4,7 @@ Recorded 2026-10-23 for branch `manus/nexus-v1-complete-20261023`.
 
 ## Repository and commits
 
-The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current head is `e9b86e8bd3d01c55e215243281aa305a646d0d88`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
+The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current head is `c42108484b586d0fe6d15bdef4bb79ae07fe7a4f`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
 
 The branch contains the imported checkpoint as `794e998`, the registry/engine/worker milestone as `8043a6d`, approval/cancellation controls as `97974a9`, durable signals as `326039e`, supervised execution/provenance as `b32de44`, and HTTP/reconciliation controls as `e9b86e8`.
 
@@ -12,7 +12,7 @@ The branch contains the imported checkpoint as `794e998`, the registry/engine/wo
 
 Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. The current full suite passes 96 tests, including signal, heartbeat, worker-kill/recovery, supervised timeout/process-tree cleanup, and authenticated HTTP tests. `pip check`, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
 
-Hosted CI run `40002530774` succeeded at head `97974a9`; hosted results for the current heads `b32de44` and `e9b86e8` are pending/not yet observed. The pre-import failure `40001799576` is historical and not used as current evidence.
+Hosted CI run `40069740375` succeeded at the current head `c421084`; runs `40069712401` and `40069513701` also succeeded at the preceding implementation heads. The pre-import failure `40001799576` is historical and not used as current evidence.
 
 ## Requirement status
 
@@ -29,9 +29,9 @@ Hosted CI run `40002530774` succeeded at head `97974a9`; hosted results for the 
 | HTTP API and bearer authentication | implemented and tested locally | `nexus/api.py`; localhost-only, no TLS/roles/rate limits |
 | Complete CLI, preflight and offline demo | partially implemented | Checkpoint CLI only; worker/serve/preflight/demo remain |
 | Delegation, scoped memory, capabilities, budgets, secrets, telemetry | not implemented | Planned follow-up slices |
-| Packaging | prepared but unverified at current head | Rebuild wheel/sdist and outside-checkout smoke after final changes |
+| Packaging | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
 | Deployment examples and full runbooks | not implemented | Existing recovery documentation preserved |
-| Wheel/sdist installed-package qualification | pending artifact run | Must be rerun from outside checkout |
+| Wheel/sdist installed-package qualification | implemented and tested locally | Python 3.12 wheel/sdist installs and schema/import smoke passed |
 | Complete-product X01–X16 | not complete | Most controls and qualification remain outstanding |
 
 ## Known defects and safety boundaries

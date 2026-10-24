@@ -1,6 +1,6 @@
 # Nexus acceptance matrix
 
-Updated for PR #5 head `e9b86e8bd3d01c55e215243281aa305a646d0d88` on 2026-10-23. Local Python 3.12 suite: 96 passed; compilation and `git diff --check` passed. Hosted CI for this exact head is pending/not yet observed.
+Updated for PR #5 head `c42108484b586d0fe6d15bdef4bb79ae07fe7a4f` on 2026-10-23. Local Python 3.12 suite: 96 passed; compilation, packaging, installed wheel/sdist smoke, and `git diff --check` passed. Hosted CI run `40069740375` passed for this exact head.
 
 | Gate | Status | Evidence or remaining gap |
 |---|---|---|
@@ -23,10 +23,10 @@ Updated for PR #5 head `e9b86e8bd3d01c55e215243281aa305a646d0d88` on 2026-10-23.
 | HTTP TLS, operator roles, rate limits | not implemented | Current adapter is localhost-oriented bearer auth only |
 | Full CLI worker/serve/preflight/demo | partially implemented | Existing CLI; worker/serve/demo/preflight completeness remains |
 | Online backup and fresh restore | implemented and tested locally | Existing backup tests; broader concurrent-write rehearsal remains |
-| Packaging and installed-package qualification | prepared but unverified at this head | Must rebuild wheel/sdist and run outside-checkout smoke after final changes |
+| Packaging and installed-package qualification | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
 | Delegation, memory, capabilities, budgets, secrets, telemetry | not implemented | Product slices remain |
 | Full X01-X16 / 31+16 gates | not complete | Several product and deployment gates remain |
-| Hosted CI for final head | prepared but unverified | Query after hosted run for exact `e9b86e8` head |
+| Hosted CI for final head | verified in hosted CI | Run `40069740375` passed for exact `c421084` head |
 
 ## Unsupported guarantees
 
