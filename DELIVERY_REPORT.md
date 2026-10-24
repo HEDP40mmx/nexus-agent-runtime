@@ -10,7 +10,7 @@ The branch contains the imported checkpoint as `794e998`, the registry/engine/wo
 
 ## Validation actually performed
 
-Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. After the engine milestone, the full suite passed 80 tests. After approval and cancellation controls, the full suite passed 83 tests. After durable signal consumption and automatic heartbeats, the full suite passed 88 tests, including four signal tests and a real-time long-action heartbeat test. `pip check`, the required-file safeguard, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
+Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. After the engine milestone, the full suite passed 80 tests. After approval and cancellation controls, the full suite passed 83 tests. After durable signal consumption and automatic heartbeats, the full suite passed 88 tests. After subprocess kill/recovery qualification, the full suite passed 90 tests, including real kill-after-allocation, abandoned-attempt recovery, and stale-completion tests. `pip check`, the required-file safeguard, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
 
 Hosted CI run `40001799576` failed at the pre-import head `3659cff` because the required package paths were absent at that historical commit. Hosted CI run `40002328861` succeeded at head `8043a6d`, and hosted CI run `40002530774` succeeded at head `97974a9`. The later documentation-only head `f7f302f` has not had a separate hosted run recorded; the implementation code is unchanged after the successful implementation run.
 
@@ -22,7 +22,7 @@ Hosted CI run `40001799576` failed at the pre-import head `3659cff` because the 
 | Atomic SQLite schema, submission replay/conflict, events, backup | implemented and tested locally | Imported checkpoint tests |
 | Versioned action registry | implemented and tested locally | `nexus/registry.py`, engine tests |
 | Durable claims, lease epoch, heartbeat fencing | implemented and tested locally; full recovery still pending | `nexus/engine.py`; independent heartbeat connection and long-action regression test |
-| Attempt allocation and deterministic retries | implemented and tested locally | Engine retry test; no process-kill recovery yet |
+| Attempt allocation, deterministic retries, and explicit expired-lease recovery | implemented and tested locally | `nexus/engine.py`, `tests/test_qualification.py`; worker-loop reconciliation scheduling remains pending |
 | Supervised child processes and bounded protocol | not implemented | Current engine still invokes trusted handlers in-process |
 | Approvals and cancellation | implemented and tested locally | `nexus/service.py`, `tests/test_controls.py`; expiry/mismatch races remain |
 | Durable signals and consuming waits | implemented and tested locally | FIFO consumption, replay/conflict handling, early delivery, and wait wake-up |
@@ -36,6 +36,6 @@ Hosted CI run `40001799576` failed at the pre-import head `3659cff` because the 
 
 ## Known defects and safety boundaries
 
-The worker currently executes trusted registry handlers in the worker process rather than a shell-free supervised child. Automatic renewal now runs on a separate SQLite connection while an action is active, but complete abandoned-attempt reconciliation, process-kill tests, timeout enforcement, and child cleanup are not yet implemented. Durable signal waits are implemented and tested. Approval expiry and mismatched approval binding need more tests and a migration/extension design. HTTP, preflight, complete CLI, deployment, and the complete-product controls are unfinished.
+The worker currently executes trusted registry handlers in the worker process rather than a shell-free supervised child. Automatic renewal now runs on a separate SQLite connection while an action is active. Explicit expired-lease reconciliation and real subprocess kill/stale-completion tests now pass, but the long-lived worker does not yet schedule reconciliation automatically, and timeout enforcement and child cleanup are not yet implemented. Durable signal waits are implemented and tested. Approval expiry and mismatched approval binding need more tests and a migration/extension design. HTTP, preflight, complete CLI, deployment, and the complete-product controls are unfinished.
 
 Do not interpret the local test count as proof of exactly-once external effects, power-loss safety, hostile-code isolation, hosted CI success, or production readiness.

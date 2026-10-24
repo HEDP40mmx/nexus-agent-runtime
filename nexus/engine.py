@@ -128,6 +128,54 @@ class Engine:
                 self.store.event(claim.run_id, "run_succeeded", now, {})
             return True
 
+    def reconcile_expired(self):
+        """Recover claims whose persisted lease expired before a worker returned."""
+        now = self.store.now_ms()
+        recovered = 0
+        with self.store.tx():
+            rows = self.db.execute("""SELECT r.*, s.step_id, s.max_attempts, s.base_delay_ms,
+                    s.cap_delay_ms, s.attempts_started
+                FROM runs r JOIN steps s ON s.run_id=r.run_id AND s.ordinal=r.next_step
+                WHERE r.status='running' AND r.lease_until_ms<=?
+                ORDER BY r.lease_until_ms,r.run_id""", (now,)).fetchall()
+            for row in rows:
+                attempt = self.db.execute("""SELECT * FROM attempts WHERE run_id=? AND step_id=?
+                    AND status='running' ORDER BY attempt_no DESC LIMIT 1""",
+                                          (row["run_id"], row["step_id"])).fetchone()
+                if attempt is None:
+                    self.db.execute("""UPDATE runs SET status='queued',lease_owner=NULL,
+                        lease_until_ms=NULL,ready_at_ms=?,updated_ms=? WHERE run_id=?""",
+                                    (now, now, row["run_id"]))
+                    self.store.event(row["run_id"], "claim_requeued", now,
+                                     {"reason": "expired_before_attempt"}, row["step_id"])
+                    recovered += 1
+                    continue
+                attempt_no = attempt["attempt_no"]
+                self.db.execute("""UPDATE attempts SET status='abandoned',finished_ms=?,
+                    error_code='LEASE_EXPIRED' WHERE run_id=? AND step_id=? AND attempt_no=?
+                    AND status='running'""", (now, row["run_id"], row["step_id"], attempt_no))
+                if row["attempts_started"] < row["max_attempts"]:
+                    delay = min(row["cap_delay_ms"], row["base_delay_ms"] * 2 ** (attempt_no - 1))
+                    due = row["lease_until_ms"] + delay
+                    self.db.execute("""UPDATE steps SET status='retry_wait',due_at_ms=?,
+                        error_code='LEASE_EXPIRED' WHERE run_id=? AND step_id=?""",
+                                    (due, row["run_id"], row["step_id"]))
+                    self.db.execute("""UPDATE runs SET status='retry_wait',ready_at_ms=?,
+                        lease_owner=NULL,lease_until_ms=NULL,updated_ms=? WHERE run_id=?""",
+                                    (due, now, row["run_id"]))
+                    self.store.event(row["run_id"], "attempt_abandoned", now,
+                                     {"attempt_no": attempt_no, "due_at_ms": due}, row["step_id"])
+                else:
+                    self.db.execute("""UPDATE steps SET status='failed',error_code='ATTEMPTS_EXHAUSTED'
+                        WHERE run_id=? AND step_id=?""", (row["run_id"], row["step_id"]))
+                    self.db.execute("""UPDATE runs SET status='failed',error_code='ATTEMPTS_EXHAUSTED',
+                        lease_owner=NULL,lease_until_ms=NULL,updated_ms=? WHERE run_id=?""",
+                                    (now, row["run_id"]))
+                    self.store.event(row["run_id"], "run_failed", now,
+                                     {"error_code": "ATTEMPTS_EXHAUSTED"}, row["step_id"])
+                recovered += 1
+        return recovered
+
     def allocate_attempt(self, claim):
         now = self.store.now_ms()
         with self.store.tx():
