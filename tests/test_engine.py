@@ -28,13 +28,11 @@ def test_unknown_action_fails_without_spending_attempt(env):
 
 def test_retry_delay_is_durable_and_deterministic(env):
     store, api, clock = env
-    calls = []
 
     def flaky(value, ctx):
-        calls.append(ctx.attempt_no)
-        if len(calls) == 1:
+        if ctx.attempt_no == 1:
             raise RetryableError("temporary")
-        return {"ok": True}
+        return {"ok": ctx.attempt_no}
 
     registry = Registry().register("flaky", "1", flaky)
     step = StepSpec.action(id="a", action="flaky", version="1", input={},
@@ -49,7 +47,7 @@ def test_retry_delay_is_durable_and_deterministic(env):
     clock.value += 10
     assert engine.execute_once() is True
     assert api.get_run(run_id)["status"] == "succeeded"
-    assert calls == [1, 2]
+    assert api.get_run(run_id)["steps"][0]["result"] == {"ok": 2}
 
 
 def test_stale_owner_cannot_finish_after_epoch_replacement(env):

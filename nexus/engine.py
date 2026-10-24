@@ -5,6 +5,7 @@ import threading
 import uuid
 from .models import (ActionContext, LeaseLost, PermanentError, RetryableError,
                      TERMINAL, digest, canonical)
+from .supervisor import execute as execute_supervised
 
 LEASE_MS = 30_000
 
@@ -283,8 +284,7 @@ class Engine:
                                          name="nexus-heartbeat", daemon=True)
             heartbeat.start()
             try:
-                result = handler(claim.input, ActionContext(claim.run_id, claim.step_id, claim.attempt_no,
-                                                            claim.epoch, claim.effect_key))
+                result = execute_supervised(handler, claim, claim.timeout_ms)
                 if lost.is_set():
                     raise LeaseLost("lease renewal was lost during action execution")
             finally:
