@@ -20,6 +20,16 @@ class Registry:
     def resolve(self, name, version):
         return self._handlers.get((name, version))
 
+    def import_reference(self, name, version):
+        handler = self.resolve(name, version)
+        if handler is None:
+            return None
+        module = getattr(handler, "__module__", None)
+        qualname = getattr(handler, "__qualname__", None)
+        if not isinstance(module, str) or not isinstance(qualname, str) or "<" in qualname:
+            return None
+        return f"{module}:{qualname}"
+
     def require(self, name, version):
         handler = self.resolve(name, version)
         if handler is None:

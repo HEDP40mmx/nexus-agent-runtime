@@ -284,7 +284,11 @@ class Engine:
                                          name="nexus-heartbeat", daemon=True)
             heartbeat.start()
             try:
-                result = execute_supervised(handler, claim, claim.timeout_ms)
+                result = execute_supervised(
+                    handler, claim, claim.timeout_ms,
+                    action_ref=self.registry.import_reference(claim.action, claim.version),
+                    stop_event=lost,
+                )
                 if lost.is_set():
                     raise LeaseLost("lease renewal was lost during action execution")
             finally:
