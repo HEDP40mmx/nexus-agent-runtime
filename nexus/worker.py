@@ -13,7 +13,8 @@ class Worker:
         self.stop_event = threading.Event()
 
     def run_once(self):
-        return self.engine.execute_once()
+        recovered = self.engine.reconcile_expired()
+        return self.engine.execute_once() or recovered > 0
 
     def stop(self):
         self.stop_event.set()

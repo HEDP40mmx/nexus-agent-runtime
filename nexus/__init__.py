@@ -8,3 +8,4 @@ from .service import Nexus
 from .registry import Registry
 from .engine import Engine
 from .worker import Worker
+from .api import make_server, serve

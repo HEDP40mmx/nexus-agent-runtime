@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from nexus import Engine, LeaseLost, Nexus, Registry, RetryPolicy, RunSpec, StepSpec, Store
+from nexus import Engine, LeaseLost, Nexus, Registry, RetryPolicy, RunSpec, StepSpec, Store, Worker
 
 
 def _wait_for(path, timeout=3.0):
@@ -78,3 +78,20 @@ def test_stale_completion_is_rejected_after_reconciliation(env):
     engine.succeed(fresh, {"fresh": True})
     assert api.get_run(run_id)["status"] == "succeeded"
     assert api.get_run(run_id)["steps"][0]["result"] == {"fresh": True}
+
+
+def test_worker_poll_reconciles_expired_attempts(env):
+    store, api, clock = env
+    registry = Registry().register("echo", "1", lambda value, ctx: {"attempt": ctx.attempt_no})
+    policy = RetryPolicy(max_attempts=2, base_delay_ms=0, cap_delay_ms=0)
+    run_id = api.submit(RunSpec((StepSpec.action(id="a", action="echo", version="1", input={},
+                                                  retry=policy),)),
+                        "req-worker-reconcile")
+    old = Engine(store, registry, lease_ms=5).allocate_attempt(Engine(store, registry, lease_ms=5).claim("old"))
+    clock.value += 6
+    worker = Worker(store, registry, lease_ms=5, heartbeat_interval_ms=1)
+    assert worker.run_once() is True
+    assert api.get_run(run_id)["status"] == "succeeded"
+    attempts = store.db.execute("SELECT attempt_no,status FROM attempts WHERE run_id=? ORDER BY attempt_no",
+                                (run_id,)).fetchall()
+    assert [(row[0], row[1]) for row in attempts] == [(1, "abandoned"), (2, "succeeded")]
