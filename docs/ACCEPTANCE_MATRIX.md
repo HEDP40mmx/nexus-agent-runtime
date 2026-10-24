@@ -1,6 +1,6 @@
 # Nexus acceptance matrix
 
-Updated for PR #5 head `2b87426cd6b14eeb9c5ab52075dd5f36346a2966` on 2026-10-23. Local Python 3.12 suite: 98 passed; compilation and `git diff --check` passed. The role/rate-limit implementation head is awaiting its own hosted CI run.
+Updated for PR #5 head `bc4e310a4303f6304b1073f925e99740c3dc3d31` on 2026-10-23. Local Python 3.12 suite: 101 passed; clean-launch, credential-hygiene, cancellation, compilation, and `git diff --check` checks passed. Hosted CI for this clean-launch head is pending.
 
 | Gate | Status | Evidence or remaining gap |
 |---|---|---|
@@ -15,9 +15,10 @@ Updated for PR #5 head `2b87426cd6b14eeb9c5ab52075dd5f36346a2966` on 2026-10-23.
 | Expired lease reconciliation | implemented and tested locally | Explicit `reconcile_expired()` plus worker-poll qualification |
 | Worker kill after durable allocation | implemented and tested locally | Real subprocess qualification |
 | Stale completion after replacement | implemented and tested locally | Real recovery qualification |
-| Supervised child action execution | implemented and tested locally | Fork child, fixed internal target, bounded JSON response |
+| Supervised child action execution | partially implemented and tested locally | Importable handlers use `python -I -m nexus._action` with fixed args, minimal environment, closed descriptors, and bounded streams; non-importable handlers still use trusted fork fallback |
 | Action timeout enforcement | implemented and tested locally | Timeout qualification |
-| Process-group/descendant cleanup | implemented and tested locally | Descendant sleep process qualification |
+| Process-group/descendant cleanup | implemented and tested locally | Clean and trusted paths terminate process groups; adversarial escape tests remain |
+| Active termination on cancellation/lease loss | implemented and tested locally | Clean child is terminated when heartbeat fencing reports loss |
 | Child protocol output bound | implemented and tested locally | Oversized-result qualification; stderr channel not separately implemented |
 | Authenticated HTTP control endpoints | implemented and tested locally | Localhost bearer-token adapter and structured errors |
 | Role-based authorization | implemented and tested locally | Independent reader/operator/admin tokens; reader is read-only; audit principal comes from matched role |
@@ -28,8 +29,8 @@ Updated for PR #5 head `2b87426cd6b14eeb9c5ab52075dd5f36346a2966` on 2026-10-23.
 | Packaging and installed-package qualification | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
 | Delegation, memory, capabilities, budgets, secrets, telemetry | not implemented | Product slices remain |
 | Full X01-X16 / 31+16 gates | not complete | Several product and deployment gates remain |
-| Hosted CI for final head | pending | Must query the run for exact `2b87426` head |
+| Hosted CI for final head | pending | Must query the run for exact `bc4e310` head |
 
 ## Unsupported guarantees
 
-The supervised boundary is a trusted same-user process boundary, not hostile-code sandboxing. The implementation does not claim exactly-once external effects, power-loss safety, TLS, distributed scale, or production readiness. Role authentication and local rate limiting are now implemented, but token rotation, persistent auth-file management, authentication-failure metrics, and reverse-proxy deployment hardening remain future work. Fork-based supervision currently emits Python’s warning when the parent is multithreaded; this needs a safer process-launch design before production use.
+The clean launch is a controlled same-user subprocess boundary, not hostile-code sandboxing. Non-importable handlers still use a trusted fork fallback, so the no-fork release gate is not complete. The implementation does not claim exactly-once external effects, power-loss safety, TLS, distributed scale, or production readiness. Role authentication and local rate limiting are implemented, but token rotation, persistent auth-file management, authentication-failure metrics, OS resource controls, adversarial escape testing, and reverse-proxy hardening remain future work.
