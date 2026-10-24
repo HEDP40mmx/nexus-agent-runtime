@@ -27,12 +27,15 @@ class Claim:
 
 
 class Engine:
-    def __init__(self, store, registry=None, lease_ms=LEASE_MS, heartbeat_interval_ms=None):
+    def __init__(self, store, registry=None, lease_ms=LEASE_MS, heartbeat_interval_ms=None,
+                 execution_profile="trusted", resource_limits=None):
         self.store = store
         self.db = store.db
         self.registry = registry
         self.lease_ms = lease_ms
         self.heartbeat_interval_ms = heartbeat_interval_ms or max(1, lease_ms // 6)
+        self.execution_profile = execution_profile
+        self.resource_limits = resource_limits
         if self.heartbeat_interval_ms >= lease_ms:
             raise ValueError("heartbeat interval must be shorter than lease duration")
 
@@ -288,6 +291,8 @@ class Engine:
                     handler, claim, claim.timeout_ms,
                     action_ref=self.registry.import_reference(claim.action, claim.version),
                     stop_event=lost,
+                    profile=self.execution_profile,
+                    resource_limits=self.resource_limits,
                 )
                 if lost.is_set():
                     raise LeaseLost("lease renewal was lost during action execution")

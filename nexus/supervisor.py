@@ -1,7 +1,7 @@
 """Trusted and clean subprocess supervision for registered actions."""
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import json
 import multiprocessing
 import os
@@ -16,6 +16,33 @@ from .models import ActionContext, LeaseLost, PermanentError, RetryableError, ca
 MAX_PROTOCOL_BYTES = 65536
 MAX_STDERR_BYTES = 32768
 GRACE_MS = 100
+PROFILES = {"trusted", "restricted", "isolated"}
+
+
+@dataclass(frozen=True)
+class ResourceLimits:
+    """OS-enforced limits for a clean child.
+
+    `filesystem_root` is mandatory for the isolated profile. The child enters
+    it with chroot inside a user/mount namespace; if that boundary cannot be
+    established, the child fails closed instead of running unrestricted.
+    """
+
+    cpu_seconds: int = 2
+    memory_bytes: int = 256 * 1024 * 1024
+    file_bytes: int = 8 * 1024 * 1024
+    filesystem_root: str | None = None
+
+    def validate(self, profile):
+        if profile not in PROFILES:
+            raise ValueError("unknown execution profile")
+        for name in ("cpu_seconds", "memory_bytes", "file_bytes"):
+            value = getattr(self, name)
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if profile == "isolated":
+            if not isinstance(self.filesystem_root, str) or not os.path.isabs(self.filesystem_root):
+                raise ValueError("isolated profile requires an absolute filesystem_root")
 
 
 def _error_payload(kind, code, message):
@@ -70,14 +97,42 @@ def _clean_environment():
     }
 
 
-def _execute_clean(action_ref, claim, timeout_ms, stop_event=None):
+def _execute_clean(action_ref, claim, timeout_ms, stop_event=None, profile="restricted", limits=None):
+    limits = limits or ResourceLimits()
+    limits.validate(profile)
     request = canonical({
+        "action_ref": action_ref,
+        "profile": profile,
+        "limits": asdict(limits),
+        "filesystem_root": limits.filesystem_root,
         "input": claim.input,
         "context": asdict(ActionContext(claim.run_id, claim.step_id, claim.attempt_no,
                                          claim.epoch, claim.effect_key)),
     }).encode("utf-8")
+    command = [sys.executable, "-I", "-m", "nexus._action", action_ref]
+    if profile == "isolated":
+        unshare = "/usr/bin/unshare"
+        if not os.path.exists(unshare) or not limits.filesystem_root or not os.path.isdir(limits.filesystem_root):
+            error = PermanentError("isolated execution requires unshare")
+            error.code = "ISOLATION_UNAVAILABLE"
+            raise error
+        try:
+            probe = subprocess.run(
+                [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork", "/bin/true"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env=_clean_environment(), close_fds=True, timeout=1,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            error = PermanentError("isolated namespace capability is unavailable")
+            error.code = "ISOLATION_UNAVAILABLE"
+            raise error from exc
+        if probe.returncode != 0:
+            error = PermanentError("isolated namespace capability is unavailable")
+            error.code = "ISOLATION_UNAVAILABLE"
+            raise error
+        command = [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork"] + command
     process = subprocess.Popen(
-        [sys.executable, "-I", "-m", "nexus._action", action_ref],
+        command,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -225,8 +280,19 @@ def _execute_fork(handler, claim, timeout_ms, stop_event=None):
             process.join(1)
 
 
-def execute(handler, claim, timeout_ms, *, action_ref=None, stop_event=None):
-    """Execute via clean subprocess when importable, else trusted fallback."""
+def execute(handler, claim, timeout_ms, *, action_ref=None, stop_event=None,
+            profile="trusted", resource_limits=None):
+    """Execute under an explicit profile; isolated always fails closed."""
+    if profile not in PROFILES:
+        raise ValueError("unknown execution profile")
+    if profile == "isolated" and not action_ref:
+        error = PermanentError("isolated profile requires an importable action")
+        error.code = "ISOLATION_UNAVAILABLE"
+        raise error
     if action_ref:
-        return _execute_clean(action_ref, claim, timeout_ms, stop_event)
+        return _execute_clean(action_ref, claim, timeout_ms, stop_event, profile, resource_limits)
+    if profile != "trusted":
+        error = PermanentError("non-importable action is not allowed outside trusted profile")
+        error.code = "ISOLATION_UNAVAILABLE"
+        raise error
     return _execute_fork(handler, claim, timeout_ms, stop_event)

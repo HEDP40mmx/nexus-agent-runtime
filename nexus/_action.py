@@ -1,7 +1,9 @@
-"""Clean child entry point for importable trusted/restricted actions."""
+"""Clean child entry point for importable actions."""
 from __future__ import annotations
 
 import importlib
+import os
+import resource
 import sys
 
 from .models import ActionContext, RetryableError, canonical, strict_loads
@@ -24,6 +26,33 @@ def _resolve(reference):
     return value
 
 
+def _set_limit(kind, value):
+    if type(value) is not int or value <= 0:
+        raise ValueError(f"invalid {kind} limit")
+    current_soft, current_hard = resource.getrlimit(kind)
+    hard = value if current_hard == resource.RLIM_INFINITY else min(value, current_hard)
+    resource.setrlimit(kind, (min(value, hard), hard))
+
+
+def _apply_limits(request):
+    limits = request.get("limits") or {}
+    if "cpu_seconds" in limits:
+        _set_limit(resource.RLIMIT_CPU, limits["cpu_seconds"])
+    if "memory_bytes" in limits:
+        _set_limit(resource.RLIMIT_AS, limits["memory_bytes"])
+    if "file_bytes" in limits:
+        _set_limit(resource.RLIMIT_FSIZE, limits["file_bytes"])
+
+
+def _enter_filesystem_root(root):
+    if not isinstance(root, str) or not os.path.isabs(root) or not os.path.isdir(root):
+        raise RuntimeError("isolated filesystem root is unavailable")
+    if os.geteuid() != 0:
+        raise RuntimeError("isolated filesystem root requires an OS-enforced root boundary")
+    os.chroot(root)
+    os.chdir("/")
+
+
 def main():
     if len(sys.argv) != 2:
         return 2
@@ -33,13 +62,16 @@ def main():
             response = _error("permanent", "CHILD_INPUT_LIMIT", "child request exceeded 64 KiB")
         else:
             request = strict_loads(raw)
-            handler = _resolve(sys.argv[1])
+            _apply_limits(request)
+            handler = _resolve(request["action_ref"])
+            if request.get("profile") == "isolated":
+                _enter_filesystem_root(request.get("filesystem_root"))
             result = handler(request["input"], ActionContext(**request["context"]))
             response = canonical({"ok": True, "result": result})
     except RetryableError as exc:
         response = _error("retryable", getattr(exc, "code", "RETRYABLE_ERROR"), exc)
     except BaseException as exc:
-        response = _error("permanent", getattr(exc, "code", "ACTION_ERROR"), exc)
+        response = _error("permanent", "ISOLATION_ERROR" if "isolated" in locals().get("request", {}).get("profile", "") else getattr(exc, "code", "ACTION_ERROR"), exc)
     encoded = response.encode("utf-8")
     if len(encoded) > MAX_PROTOCOL_BYTES:
         encoded = _error("permanent", "CHILD_OUTPUT_LIMIT", "child response exceeded 64 KiB").encode()

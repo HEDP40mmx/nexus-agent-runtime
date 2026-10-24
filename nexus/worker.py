@@ -6,9 +6,12 @@ from .engine import Engine
 
 class Worker:
     def __init__(self, store, registry, *, poll_interval=0.1, lease_ms=30_000,
-                 heartbeat_interval_ms=None):
+                 heartbeat_interval_ms=None, execution_profile="trusted",
+                 resource_limits=None):
         self.engine = Engine(store, registry, lease_ms=lease_ms,
-                             heartbeat_interval_ms=heartbeat_interval_ms)
+                             heartbeat_interval_ms=heartbeat_interval_ms,
+                             execution_profile=execution_profile,
+                             resource_limits=resource_limits)
         self.poll_interval = poll_interval
         self.stop_event = threading.Event()
 
