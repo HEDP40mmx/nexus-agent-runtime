@@ -4,15 +4,15 @@ Recorded 2026-10-23 for branch `manus/nexus-v1-complete-20261023`.
 
 ## Repository and commits
 
-The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current implementation head is `bc4e310a4303f6304b1073f925e99740c3dc3d31`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
+The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current implementation head is `3be4b90e805de2889c4172ba0221d17406845bd7`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
 
 The branch contains the imported checkpoint as `794e998`, the registry/engine/worker milestone as `8043a6d`, approval/cancellation controls as `97974a9`, durable signals as `326039e`, supervised execution/provenance as `b32de44`, and HTTP/reconciliation controls as `e9b86e8`.
 
 ## Validation actually performed
 
-Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. The current full suite passes 101 tests, including signal, heartbeat, worker-kill/recovery, clean child launch, credential-hygiene, active cancellation, role authorization, and rate-limit tests. `pip check`, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
+Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. The current full suite passes 103 tests, including signal, heartbeat, worker-kill/recovery, clean child launch, credential-hygiene, active cancellation, isolated-profile validation, role authorization, and rate-limit tests. `pip check`, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
 
-Hosted CI run `40069740375` succeeded at the earlier implementation head `c421084`; the clean-launch head `bc4e310` is awaiting its own hosted run. The pre-import failure `40001799576` is historical and not used as current evidence.
+Hosted CI run `40071948048` succeeded at clean-launch head `bc4e310`; the isolated-profile head `3be4b90` is awaiting its own hosted run. The pre-import failure `40001799576` is historical and not used as current evidence.
 
 ## Requirement status
 
@@ -25,6 +25,8 @@ Hosted CI run `40069740375` succeeded at the earlier implementation head `c42108
 | Attempt allocation, deterministic retries, and expired-lease recovery | implemented and tested locally | `nexus/engine.py`, `tests/test_qualification.py`; worker poll schedules reconciliation |
 | Supervised child processes and bounded protocol | partially implemented and tested locally | Importable handlers use clean `python -I -m nexus._action`; non-importable handlers retain trusted fork fallback; bounded protocol and process cleanup tests pass |
 | Credential hygiene and active cancellation | implemented and tested locally for clean handlers | Minimal environment excludes tested parent credentials; heartbeat lease loss/cancellation actively terminates clean child |
+| Isolated CPU/memory/file limits | implemented and tested locally | `ResourceLimits` maps to POSIX `RLIMIT_CPU`, `RLIMIT_AS`, and `RLIMIT_FSIZE` |
+| Isolated filesystem boundary | fail-closed and capability-qualified | Absolute root, namespace probe, and child `chroot`; current sandbox lacks required namespace capability |
 | Approvals and cancellation | implemented and tested locally | `nexus/service.py`, `tests/test_controls.py`; expiry/mismatch races remain |
 | Durable signals and consuming waits | implemented and tested locally | FIFO consumption, replay/conflict handling, early delivery, and wait wake-up |
 | HTTP API and bearer authentication | implemented and tested locally | `nexus/api.py`; localhost-only bearer authentication with structured errors |
@@ -38,6 +40,6 @@ Hosted CI run `40069740375` succeeded at the earlier implementation head `c42108
 
 ## Known defects and safety boundaries
 
-Importable actions now use a clean `python -I -m nexus._action` child with a fixed argument vector, minimal environment, closed descriptors, bounded streams, timeout, process-group cleanup, and active cancellation/lease-loss termination. Non-importable handlers still use the trusted same-user fork fallback and continue to emit Python’s multithreaded-fork warning; migrating that fallback is a release gate. The HTTP adapter has local role-based bearer authentication, per-client rate limiting, bounded request concurrency, socket timeouts, and 64 KiB request limits; it remains localhost-only and lacks TLS, token rotation/auth-file management, and persistent authentication-failure metrics. OS resource controls, adversarial escape tests, approval expiry/races, complete CLI/preflight/demo, deployment, delegation, memory, capabilities, budgets, secrets, telemetry, and complete-product gates remain unfinished.
+Importable actions now use a clean `python -I -m nexus._action` child with a fixed argument vector, minimal environment, closed descriptors, bounded streams, POSIX CPU/address-space/file-size limits, timeout, process-group cleanup, and active cancellation/lease-loss termination. The opt-in isolated profile requires a filesystem root and successful Linux namespace capability probe, then applies `chroot`; it fails closed when unavailable. Non-importable handlers still use the trusted same-user fork fallback and continue to emit Python’s multithreaded-fork warning; migrating that fallback is a release gate. The HTTP adapter has local role-based bearer authentication, per-client rate limiting, bounded request concurrency, socket timeouts, and 64 KiB request limits; it remains localhost-only and lacks TLS, token rotation/auth-file management, and persistent authentication-failure metrics. Process-count/network restrictions, adversarial escape tests, approval expiry/races, complete CLI/preflight/demo, deployment, delegation, memory, capabilities, budgets, secrets, telemetry, and complete-product gates remain unfinished.
 
 Do not interpret the local test count as proof of exactly-once external effects, power-loss safety, hostile-code isolation, hosted CI success, or production readiness.
