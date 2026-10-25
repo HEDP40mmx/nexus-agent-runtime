@@ -6,6 +6,8 @@ from nexus.capabilities import CapabilityBroker
 from nexus.memory import MemoryBroker
 from nexus.secrets import SecretResolver, redact
 from nexus.telemetry import Telemetry
+from nexus.delegation import DelegationBroker
+from nexus import Nexus, RunSpec, StepSpec
 
 
 def test_capability_grant_revoke_and_denial(tmp_path):
@@ -66,3 +68,16 @@ def test_telemetry_is_bounded_and_snapshot_is_structured():
     assert snapshot["counters"][0]["value"] == 1
     with pytest.raises(ValueError):
         telemetry.increment("third", labels={"state": "new"})
+
+
+def test_delegation_link_is_idempotent_and_completion_wakes_parent(tmp_path):
+    with Store(tmp_path / "delegation.sqlite") as store:
+        api = Nexus(store)
+        parent = api.submit(RunSpec((StepSpec.wait_signal(id="p", name="done"),)), "parent")
+        child = api.submit(RunSpec((StepSpec.wait_signal(id="c", name="child"),)), "child")
+        broker = DelegationBroker(store)
+        first = broker.link(parent, child, "child-1")
+        assert broker.link(parent, child, "child-1")["child_run_id"] == child
+        assert first["status"] == "waiting"
+        assert broker.complete_child(child, "succeeded")
+        assert broker.cancel_descendants(parent, "operator") == 0
