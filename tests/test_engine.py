@@ -75,6 +75,8 @@ def test_background_heartbeat_keeps_long_action_lease(tmp_path):
         registry = Registry().register("slow", "1", slow)
         run_id = api.submit(RunSpec((StepSpec.action(id="a", action="slow", version="1", input={}),)),
                             "req-heartbeat")
-        engine = Engine(store, registry, lease_ms=40, heartbeat_interval_ms=5)
+        # Keep enough margin for hosted CI scheduling while remaining longer
+        # than the action and therefore requiring active lease renewal.
+        engine = Engine(store, registry, lease_ms=250, heartbeat_interval_ms=25)
         assert engine.execute_once() is True
         assert api.get_run(run_id)["status"] == "succeeded"
