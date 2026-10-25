@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 from .models import (Conflict, InvalidSpec, StorageError, StorageBusy, SystemClock,
                      canonical)
+from .migrations import CURRENT_SCHEMA_VERSION, migrate
 
 
 def wal_safe(version):
@@ -25,7 +26,8 @@ def selected_journal(requested, version=None):
 
 class Store:
     """One instance/connection belongs to one thread and process."""
-    def __init__(self, path, journal="auto", clock=None, busy_timeout_ms=5000):
+    def __init__(self, path, journal="auto", clock=None, busy_timeout_ms=5000,
+                 migration_failpoint=None):
         if str(path) == ":memory:" or not str(path).strip():
             raise InvalidSpec("A local file database is required")
         self.path = str(Path(path).absolute())
@@ -36,7 +38,7 @@ class Store:
             self.db.row_factory = sqlite3.Row
             self.db.execute("PRAGMA foreign_keys=ON")
             self.db.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
-            self._initialize(journal)
+            self._initialize(journal, migration_failpoint=migration_failpoint)
         except BaseException as exc:
             if self.db is not None:
                 self.db.close()
@@ -51,11 +53,11 @@ class Store:
             raise StorageBusy("Database is busy; retry the operation") from exc
         raise StorageError("SQLite operation failed") from exc
 
-    def _initialize(self, requested):
+    def _initialize(self, requested, migration_failpoint=None):
         # Inspect before changing any persistent PRAGMA on an existing file.
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
         nonempty = self.db.execute("SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").fetchone()
-        if version not in (0, 1) or (version == 0 and nonempty):
+        if version not in (0, 1, CURRENT_SCHEMA_VERSION) or (version == 0 and nonempty):
             raise Conflict("Unknown or unversioned database; no migration performed")
         if version == 0:
             mode = selected_journal(requested)
@@ -63,6 +65,8 @@ class Store:
             if actual != mode:
                 raise StorageError("Could not select the requested journal")
         else:
+            if not self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='runtime_meta'").fetchone():
+                raise Conflict("Versioned database is missing runtime metadata")
             mode = self.db.execute("SELECT value FROM runtime_meta WHERE key='journal'").fetchone()
             if mode is None or mode[0] not in ("wal", "delete"):
                 raise Conflict("Invalid journal metadata")
@@ -88,7 +92,10 @@ class Store:
                         statement = ""
                 self.db.execute("INSERT INTO runtime_meta VALUES ('journal',?)", (mode,))
                 self.db.execute("PRAGMA user_version=1")
-            elif v != 1:
+                v = 1
+            if v in (1, CURRENT_SCHEMA_VERSION):
+                migrate(self.db, v, CURRENT_SCHEMA_VERSION, failpoint=migration_failpoint)
+            else:
                 raise Conflict("Unsupported schema version")
 
     def now_ms(self):

@@ -15,7 +15,7 @@ def test_cli_init_and_version(tmp_path):
     result = subprocess.run([sys.executable, "-m", "nexus", "init", "--database", str(tmp_path/"x.db")],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["settings"]["user_version"] == 1
+    assert json.loads(result.stdout)["settings"]["user_version"] == 2
     result = subprocess.run([sys.executable, "-m", "nexus", "--version"],
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0

@@ -24,7 +24,7 @@ def test_schema_and_reopen(env):
     run = n.submit(spec(), "key")
     mode = store.settings()
     assert mode["journal_mode"] in ("wal", "delete")
-    assert mode == dict(user_version=1,journal_mode=mode["journal_mode"],
+    assert mode == dict(user_version=2,journal_mode=mode["journal_mode"],
                         synchronous=2 if mode["journal_mode"] == "wal" else 3,
                         foreign_keys=1,busy_timeout=5000)
     with Store(store.path, clock=clock) as reopened:
@@ -33,7 +33,7 @@ def test_schema_and_reopen(env):
         assert reopened.settings() == mode
 
 
-@pytest.mark.parametrize("version", [0, 2, 999])
+@pytest.mark.parametrize("version", [0, 1, 3, 999])
 def test_unknown_database_is_not_modified(tmp_path, version):
     path = tmp_path / "unknown.db"
     with sqlite3.connect(path) as c:
