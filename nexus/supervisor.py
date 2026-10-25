@@ -31,18 +31,22 @@ class ResourceLimits:
     cpu_seconds: int = 2
     memory_bytes: int = 256 * 1024 * 1024
     file_bytes: int = 8 * 1024 * 1024
+    max_processes: int = 16
     filesystem_root: str | None = None
+    network_mode: str = "none"
 
     def validate(self, profile):
         if profile not in PROFILES:
             raise ValueError("unknown execution profile")
-        for name in ("cpu_seconds", "memory_bytes", "file_bytes"):
+        for name in ("cpu_seconds", "memory_bytes", "file_bytes", "max_processes"):
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
         if profile == "isolated":
             if not isinstance(self.filesystem_root, str) or not os.path.isabs(self.filesystem_root):
                 raise ValueError("isolated profile requires an absolute filesystem_root")
+            if self.network_mode != "none":
+                raise ValueError("isolated profile requires network_mode='none'")
 
 
 def _error_payload(kind, code, message):
@@ -118,7 +122,7 @@ def _execute_clean(action_ref, claim, timeout_ms, stop_event=None, profile="rest
             raise error
         try:
             probe = subprocess.run(
-                [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork", "/bin/true"],
+                [unshare, "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork", "/bin/true"],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 env=_clean_environment(), close_fds=True, timeout=1,
             )
@@ -130,7 +134,7 @@ def _execute_clean(action_ref, claim, timeout_ms, stop_event=None, profile="rest
             error = PermanentError("isolated namespace capability is unavailable")
             error.code = "ISOLATION_UNAVAILABLE"
             raise error
-        command = [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork"] + command
+        command = [unshare, "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork"] + command
     process = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,

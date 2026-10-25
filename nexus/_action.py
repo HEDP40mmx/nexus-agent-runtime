@@ -42,6 +42,8 @@ def _apply_limits(request):
         _set_limit(resource.RLIMIT_AS, limits["memory_bytes"])
     if "file_bytes" in limits:
         _set_limit(resource.RLIMIT_FSIZE, limits["file_bytes"])
+    if "max_processes" in limits and hasattr(resource, "RLIMIT_NPROC"):
+        _set_limit(resource.RLIMIT_NPROC, limits["max_processes"])
 
 
 def _enter_filesystem_root(root):

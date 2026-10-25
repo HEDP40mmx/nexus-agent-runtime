@@ -10,7 +10,7 @@ Nexus distinguishes durable execution from host isolation. A child process that 
 |---|---|---|
 | Trusted | Reviewed first-party handlers | Supported. Non-importable handlers currently use a same-user fork fallback with bounded protocol and timeout containment. |
 | Restricted | Importable third-party handlers with controlled process launch | Partially implemented. Importable handlers launch through `python -I -m nexus._action`, with fixed arguments, `shell=False`, `close_fds=True`, a new session/process group, bounded stdin/stdout/stderr, minimal environment, monotonic timeout, active cancellation/lease-loss termination, and POSIX CPU/address-space/file-size limits. Filesystem/network restrictions are not implied by this profile. |
-| Isolated | Potentially hostile or unknown packages | Opt-in and fail-closed. The supervisor requires an absolute filesystem root, probes unprivileged Linux user/mount/pid namespace capability, launches with `unshare`, and the child applies CPU/address-space/file-size limits before entering the root with `chroot`. If the root or namespace capability is unavailable, no action is launched. A namespace alone must not be treated as a complete hostile-code guarantee. |
+| Isolated | Potentially hostile or unknown packages | Opt-in and fail-closed. The supervisor requires an absolute filesystem root, probes unprivileged Linux user/mount/pid/network namespace capability, launches with `unshare`, and the child applies CPU/address-space/file-size/process-count limits before entering the root with `chroot`. The isolated network namespace has no inherited interfaces (`network_mode="none"`). If any required capability is unavailable, no action is launched. A namespace alone must not be treated as a complete hostile-code guarantee. |
 
 `Engine` and `Worker` expose an explicit `execution_profile` (`trusted`, `restricted`, or `isolated`) and optional `ResourceLimits`. Isolated execution rejects non-importable handlers and missing/relative filesystem roots. The default remains `trusted` for compatibility; non-importable handlers use the trusted fallback. Deployments requiring Restricted or Isolated policy must opt in explicitly.
 
@@ -30,7 +30,7 @@ This is operational containment, not hostile-code isolation. The clean child sti
 
 ## OS limits and filesystem boundary
 
-`ResourceLimits` maps to POSIX `RLIMIT_CPU`, `RLIMIT_AS`, and `RLIMIT_FSIZE`. These are enforced by the kernel and inherited by the action handler. The Isolated profile additionally requires a directory root and a successful `unshare --user --map-root-user --mount --pid --fork` capability probe. The child enters the configured root with `chroot` after resolving the registered handler. This bootstrap arrangement requires a deployment image whose interpreter and action dependencies are available before the root transition; it is not a substitute for a complete container or VM image.
+`ResourceLimits` maps to POSIX `RLIMIT_CPU`, `RLIMIT_AS`, `RLIMIT_FSIZE`, and `RLIMIT_NPROC`. These are enforced by the kernel and inherited by the action handler. The Isolated profile additionally requires a directory root and a successful `unshare --user --map-root-user --mount --pid --net --fork` capability probe. The child enters the configured root with `chroot` after resolving the registered handler, and the private network namespace starts without inherited host interfaces. This bootstrap arrangement requires a deployment image whose interpreter and action dependencies are available before the root transition; it is not a substitute for a complete container or VM image.
 
 The current sandbox cannot create the required unprivileged namespace, so qualification verifies the fail-closed path. Deployments must rerun isolated-profile qualification on the target kernel and treat a failed capability probe as a deployment error.
 
@@ -40,7 +40,7 @@ The following gates are review requirements, not claims that all are complete:
 
 1. No fork from a multithreaded worker for Restricted or Isolated execution. **Partially satisfied:** clean importable path avoids fork; the trusted fallback still uses fork.
 2. No inherited provider credentials or unrelated descriptors. **Satisfied for the clean path;** adversarial descriptor testing remains incomplete.
-3. Bounded child protocol and resource consumption. **CPU, address-space, and file-size limits implemented;** process-count, filesystem escape, and network controls require further OS qualification.
+3. Bounded child protocol and resource consumption. **CPU, address-space, file-size, and process-count limits implemented;** filesystem escape and network-deny behavior require further OS qualification.
 4. Child termination on timeout, cancellation, and confirmed lease loss. **Implemented and locally tested for clean actions.**
 5. Authenticated audit identity and HTTP concurrency/rate limits. **Implemented locally:** role tokens, role-derived principals, bounded handlers, socket timeout, and per-client sliding-window limiter.
 6. Adversarial process-escape and resource-exhaustion tests. **Pending;** current tests cover limit validation and fail-closed namespace/root handling, not hostile escape behavior.
