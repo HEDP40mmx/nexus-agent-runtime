@@ -1,16 +1,18 @@
 # Nexus delivery report
 
-Recorded 2026-10-23 for branch `manus/nexus-v1-complete-20261023`.
+Recorded 2026-10-25 for branch `manus/nexus-v1-integration-qualification`.
 
 ## Repository and commits
 
-The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current implementation head is `9ef2569964692c88dfb907b7dbb1295c8deb02b4`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
+The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current implementation head is `df248b7` (`feat: add transactional versioned schema migrations`). Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
 
 The branch contains the imported checkpoint as `794e998`, the registry/engine/worker milestone as `8043a6d`, approval/cancellation controls as `97974a9`, durable signals as `326039e`, supervised execution/provenance as `b32de44`, and HTTP/reconciliation controls as `e9b86e8`.
 
+The migration slice adds `nexus/migrations.py`, a committed authentic v1 SQLite fixture, transactional v1-to-v2 upgrade handling, malformed-version fail-closed checks, and rollback-injection tests. The fixture preserves a real v1 run and event across upgrade; a failure after the `step_capabilities` DDL leaves the database byte-identical.
+
 ## Validation actually performed
 
-Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. The current full suite passes 103 tests, including signal, heartbeat, worker-kill/recovery, clean child launch, credential-hygiene, active cancellation, isolated-profile validation, role authorization, and rate-limit tests. `pip check`, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
+Using the external Python 3.12 environment on Linux with SQLite 3.45.1, the current full suite passes 115 tests, including transactional migration/rollback, signal, heartbeat, worker-kill/recovery, clean child launch, credential-hygiene, active cancellation, isolated-profile validation, role authorization, and rate-limit tests. The targeted migration/store/packaging subset passes 23 tests. `pip check` and `compileall` passed. `git diff --check` and hosted CI have not yet been rerun for `df248b7`. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
 
 Hosted CI run `40158851225` succeeded at corrected process/network head `9ef2569`; the earlier process/network run `40158766159` failed only because the pre-existing heartbeat test was too timing-sensitive on hosted CI and was corrected by widening its lease margin. The pre-import failure `40001799576` is historical and not used as current evidence.
 
