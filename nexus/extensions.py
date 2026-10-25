@@ -9,6 +9,10 @@ def ensure_tables(store):
             granted_by TEXT NOT NULL, created_ms INTEGER NOT NULL, revoked_ms INTEGER,
             PRIMARY KEY (run_id, scope, capability)
         );
+        CREATE TABLE IF NOT EXISTS step_capabilities (
+            run_id TEXT NOT NULL, step_id TEXT NOT NULL, capability TEXT NOT NULL,
+            PRIMARY KEY (run_id, step_id, capability)
+        );
         CREATE TABLE IF NOT EXISTS memory_records (
             scope TEXT NOT NULL, key TEXT NOT NULL, revision INTEGER NOT NULL,
             value_json TEXT NOT NULL, owner TEXT NOT NULL, updated_ms INTEGER NOT NULL,

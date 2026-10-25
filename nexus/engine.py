@@ -6,6 +6,7 @@ import uuid
 from .models import (ActionContext, LeaseLost, PermanentError, RetryableError,
                      TERMINAL, digest, canonical)
 from .supervisor import execute as execute_supervised
+from .extensions import ensure_tables
 
 LEASE_MS = 30_000
 
@@ -36,6 +37,7 @@ class Engine:
         self.heartbeat_interval_ms = heartbeat_interval_ms or max(1, lease_ms // 6)
         self.execution_profile = execution_profile
         self.resource_limits = resource_limits
+        ensure_tables(store)
         if self.heartbeat_interval_ms >= lease_ms:
             raise ValueError("heartbeat interval must be shorter than lease duration")
 
@@ -51,6 +53,22 @@ class Engine:
                 WHERE r.status IN ('queued','retry_wait') AND r.ready_at_ms<=?
                 ORDER BY r.ready_at_ms,r.created_ms,r.run_id LIMIT 1""", (now,)).fetchone()
             if row is None:
+                return None
+            denied = self.db.execute("""SELECT sc.capability FROM step_capabilities sc
+                WHERE sc.run_id=? AND sc.step_id=? AND NOT EXISTS (
+                    SELECT 1 FROM capability_grants cg
+                    WHERE cg.run_id=sc.run_id AND cg.scope=sc.step_id
+                      AND cg.capability=sc.capability AND cg.revoked_ms IS NULL)
+                ORDER BY sc.capability""", (row["run_id"], row["step_id"])).fetchall()
+            if denied:
+                capabilities = [item["capability"] for item in denied]
+                self.db.execute("UPDATE steps SET status='failed',error_code='CAPABILITY_DENIED' WHERE run_id=? AND step_id=?",
+                                (row["run_id"], row["step_id"]))
+                self.db.execute("""UPDATE runs SET status='failed',error_code='CAPABILITY_DENIED',
+                    lease_owner=NULL,lease_until_ms=NULL,updated_ms=? WHERE run_id=?""",
+                                (now, row["run_id"]))
+                self.store.event(row["run_id"], "capability_denied", now,
+                                 {"capabilities": capabilities}, row["step_id"])
                 return None
             if row["kind"] == "action" and row["require_approval"]:
                 approval = self.db.execute("SELECT * FROM approvals WHERE run_id=? AND step_id=?",

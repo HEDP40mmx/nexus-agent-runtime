@@ -3,12 +3,14 @@ import json
 import uuid
 from .models import (Conflict, InvalidSpec, NotFound, RunSpec, TERMINAL,
                      canonical, digest, identifier, integer)
+from .extensions import ensure_tables
 
 
 class Nexus:
     def __init__(self, store):
         self.store = store
         self.db = store.db
+        ensure_tables(store)
 
     def submit_result(self, spec, request_key):
         identifier(request_key, "request key")
@@ -39,6 +41,9 @@ class Nexus:
                      canonical(s.get("input", {})), effect, int(s.get("require_approval", False)),
                      s.get("approval_ttl_ms", 86400000), retry.get("max_attempts", 3),
                      retry.get("base_delay_ms", 1000), retry.get("cap_delay_ms", 60000), s.get("timeout_ms", 60000)))
+                for capability in s.get("capabilities", []):
+                    self.db.execute("INSERT INTO step_capabilities(run_id,step_id,capability) VALUES (?,?,?)",
+                                    (run_id, s["id"], capability))
             self.store.event(run_id, "run_submitted", now, {"spec_digest": spec_hash})
             return run_id, True
 

@@ -8,6 +8,9 @@ from nexus.secrets import SecretResolver, redact
 from nexus.telemetry import Telemetry
 from nexus.delegation import DelegationBroker
 from nexus import Nexus, RunSpec, StepSpec
+from nexus.engine import Engine
+from nexus.registry import Registry
+from nexus.actions import marker_action
 
 
 def test_capability_grant_revoke_and_denial(tmp_path):
@@ -21,6 +24,29 @@ def test_capability_grant_revoke_and_denial(tmp_path):
         with pytest.raises(Exception) as exc:
             broker.require("run", "step", "network.none")
         assert getattr(exc.value, "code", None) == "CAPABILITY_DENIED"
+
+
+def test_denied_capability_allocates_no_attempt_and_starts_no_child(tmp_path):
+    marker = tmp_path / "child-started"
+    with Store(tmp_path / "admission.sqlite") as store:
+        api = Nexus(store)
+        registry = Registry().register("marker", "1", marker_action)
+        engine = Engine(store, registry=registry)
+        run_id = api.submit(RunSpec((StepSpec.action(
+            id="step", action="marker", version="1", input={"path": str(marker)},
+            capabilities=["filesystem.write"]),)), "denial")
+
+        assert engine.execute_once() is False
+        run = api.get_run(run_id)
+        assert run["status"] == "failed"
+        assert run["error_code"] == "CAPABILITY_DENIED"
+        assert run["steps"][0]["error_code"] == "CAPABILITY_DENIED"
+        assert store.db.execute("SELECT count(*) FROM attempts WHERE run_id=?", (run_id,)).fetchone()[0] == 0
+        assert not marker.exists()
+        events = api.events(run_id)
+        denied = [event for event in events if event["kind"] == "capability_denied"]
+        assert len(denied) == 1
+        assert denied[0]["payload"]["capabilities"] == ["filesystem.write"]
 
 
 def test_memory_is_scoped_bounded_and_compare_and_set(tmp_path):
