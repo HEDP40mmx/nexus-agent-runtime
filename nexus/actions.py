@@ -17,3 +17,11 @@ def environment_probe(value, context):
 def sleep_action(value, context):
     time.sleep(float(value.get("seconds", 1)))
     return {"finished": True}
+
+
+def marker_action(value, context):
+    """Write a marker only if the supervised action actually starts."""
+    path = value["path"]
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("started")
+    return {"started": True}

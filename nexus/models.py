@@ -160,7 +160,7 @@ class StepSpec:
         kind = data.get("kind")
         if kind == "action":
             fields(data, ("id", "kind", "action", "version", "input", "retry",
-                          "require_approval", "approval_ttl_ms", "timeout_ms"),
+                          "require_approval", "approval_ttl_ms", "timeout_ms", "capabilities"),
                    ("id", "kind", "action", "version", "input"))
             identifier(data["action"], "action"); identifier(data["version"], "version")
             if type(data["input"]) is not dict:
@@ -171,8 +171,16 @@ class StepSpec:
                 raise InvalidSpec("require_approval must be boolean")
             ttl = integer(data.get("approval_ttl_ms", 86400000), "approval_ttl_ms", 1, 604800000)
             timeout = integer(data.get("timeout_ms", 60000), "timeout_ms", 1, 3600000)
+            capabilities = data.get("capabilities", [])
+            if type(capabilities) is not list or len(capabilities) > 32 or any(
+                    not isinstance(capability, str) or re.fullmatch(r"[A-Za-z0-9._-]{1,128}", capability) is None
+                    for capability in capabilities):
+                raise InvalidSpec("capabilities must be a list of bounded identifiers")
+            if len(set(capabilities)) != len(capabilities):
+                raise InvalidSpec("duplicate capability requirement")
             normalized = {**data, "retry": retry.to_dict(), "require_approval": approval,
-                          "approval_ttl_ms": ttl, "timeout_ms": timeout}
+                          "approval_ttl_ms": ttl, "timeout_ms": timeout,
+                          "capabilities": list(capabilities)}
         elif kind == "wait_signal":
             fields(data, ("id", "kind", "name"), ("id", "kind", "name"))
             identifier(data["name"], "signal name")
@@ -186,12 +194,13 @@ class StepSpec:
 
     @classmethod
     def action(cls, *, id, action, version, input, retry=None, require_approval=False,
-               approval_ttl_ms=86400000, timeout_ms=60000):
+               approval_ttl_ms=86400000, timeout_ms=60000, capabilities=None):
         if retry is not None and not isinstance(retry, RetryPolicy):
             raise InvalidSpec("retry must be RetryPolicy")
         return cls(dict(id=id, kind="action", action=action, version=version, input=input,
                         retry=(retry or RetryPolicy()).to_dict(), require_approval=require_approval,
-                        approval_ttl_ms=approval_ttl_ms, timeout_ms=timeout_ms))
+                        approval_ttl_ms=approval_ttl_ms, timeout_ms=timeout_ms,
+                        capabilities=(capabilities or [])))
 
     @classmethod
     def wait_signal(cls, *, id, name):

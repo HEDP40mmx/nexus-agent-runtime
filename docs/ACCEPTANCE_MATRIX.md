@@ -1,11 +1,12 @@
 # Nexus acceptance matrix
 
-Updated for PR #5 head `9ef2569964692c88dfb907b7dbb1295c8deb02b4` on 2026-10-24. Local Python 3.12 suite: 103 passed; clean-launch, isolated-profile, CPU/memory/file/process-limit validation, network-deny configuration, cancellation, compilation, and `git diff --check` checks passed. Hosted CI run `40158851225` passed for this corrected head.
+Updated for feature branch head `df248b7` on 2026-10-25. Local Python 3.12 suite: 115 passed; transactional v1-to-v2 migration, rollback injection, clean-launch, isolated-profile, CPU/memory/file/process-limit validation, network-deny configuration, cancellation, compilation, and `pip check` checks passed. Generated delivery ZIPs remain untracked and are not part of the implementation commit.
 
 | Gate | Status | Evidence or remaining gap |
 |---|---|---|
 | Immutable workflow models and bounded canonical JSON | implemented and tested locally | Existing model tests; 64 KiB and depth limits |
-| SQLite schema, FK enforcement, transaction boundaries | implemented and tested locally | Store/schema tests; fresh-v1 schema v1 |
+| SQLite schema, FK enforcement, transaction boundaries | implemented and tested locally | Store/schema tests; authentic committed v1 fixture upgrades transactionally to v2 |
+| Versioned schema migrations and rollback | implemented and tested locally | `nexus/migrations.py`, `tests/test_migrations.py`; injected mid-migration failure leaves the v1 database byte-identical |
 | Idempotent submission and conflict semantics | implemented and tested locally | Service tests |
 | Durable claims, epochs, stale-owner fencing | implemented and tested locally | Engine and qualification tests |
 | Deterministic retries and spent-attempt accounting | implemented and tested locally | Engine and recovery tests |
@@ -31,7 +32,7 @@ Updated for PR #5 head `9ef2569964692c88dfb907b7dbb1295c8deb02b4` on 2026-10-24.
 | Packaging and installed-package qualification | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
 | Delegation, memory, capabilities, budgets, secrets, telemetry | not implemented | Product slices remain |
 | Full X01-X16 / 31+16 gates | not complete | Several product and deployment gates remain |
-| Hosted CI for final head | verified | Run `40158851225` passed for exact `9ef2569` head |
+| Hosted CI for final head | not rerun | Prior run `40158851225` passed for `9ef2569`; migration head `df248b7` still needs hosted CI evidence |
 
 ## Unsupported guarantees
 
