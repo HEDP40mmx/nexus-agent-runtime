@@ -4,7 +4,7 @@ Recorded 2026-10-23 for branch `manus/nexus-v1-complete-20261023`.
 
 ## Repository and commits
 
-The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current implementation head is `dfedfcb2abc437f6d825db373f61f513b6aea350`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
+The implementation is based on `main` commit `aa6eead48329fc154aba803d41935a1ad75a623d`. The current implementation head is `9ef2569964692c88dfb907b7dbb1295c8deb02b4`. Draft PR: https://github.com/HEDP40mmx/nexus-agent-runtime/pull/5. `main` was not modified.
 
 The branch contains the imported checkpoint as `794e998`, the registry/engine/worker milestone as `8043a6d`, approval/cancellation controls as `97974a9`, durable signals as `326039e`, supervised execution/provenance as `b32de44`, and HTTP/reconciliation controls as `e9b86e8`.
 
@@ -12,7 +12,7 @@ The branch contains the imported checkpoint as `794e998`, the registry/engine/wo
 
 Using an external Python 3.12.3 virtual environment on Linux with SQLite 3.45.1, the checkpoint baseline passed 76 tests. The current full suite passes 103 tests, including signal, heartbeat, worker-kill/recovery, clean child launch, credential-hygiene, active cancellation, isolated-profile validation, role authorization, and rate-limit tests. `pip check`, `compileall`, and `git diff --check` passed. The local database policy reports foreign keys enabled, a 5000 ms busy timeout, and the checkpoint’s journal selection behavior; this environment uses SQLite 3.45.1, which is not in the blueprint’s safe WAL range, so new databases select DELETE/EXTRA under `journal=auto`.
 
-Hosted CI run `40073393260` succeeded at isolated-profile head `3be4b90`; the process/network head `dfedfcb` is awaiting its own hosted run. The pre-import failure `40001799576` is historical and not used as current evidence.
+Hosted CI run `40158851225` succeeded at corrected process/network head `9ef2569`; the earlier process/network run `40158766159` failed only because the pre-existing heartbeat test was too timing-sensitive on hosted CI and was corrected by widening its lease margin. The pre-import failure `40001799576` is historical and not used as current evidence.
 
 ## Requirement status
 

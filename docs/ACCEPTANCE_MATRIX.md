@@ -1,6 +1,6 @@
 # Nexus acceptance matrix
 
-Updated for PR #5 head `dfedfcb2abc437f6d825db373f61f513b6aea350` on 2026-10-24. Local Python 3.12 suite: 103 passed; clean-launch, isolated-profile, CPU/memory/file/process-limit validation, network-deny configuration, cancellation, compilation, and `git diff --check` checks passed. Hosted CI for this process/network head is pending.
+Updated for PR #5 head `9ef2569964692c88dfb907b7dbb1295c8deb02b4` on 2026-10-24. Local Python 3.12 suite: 103 passed; clean-launch, isolated-profile, CPU/memory/file/process-limit validation, network-deny configuration, cancellation, compilation, and `git diff --check` checks passed. Hosted CI run `40158851225` passed for this corrected head.
 
 | Gate | Status | Evidence or remaining gap |
 |---|---|---|
@@ -31,7 +31,7 @@ Updated for PR #5 head `dfedfcb2abc437f6d825db373f61f513b6aea350` on 2026-10-24.
 | Packaging and installed-package qualification | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
 | Delegation, memory, capabilities, budgets, secrets, telemetry | not implemented | Product slices remain |
 | Full X01-X16 / 31+16 gates | not complete | Several product and deployment gates remain |
-| Hosted CI for final head | pending | Must query the run for exact `dfedfcb` head |
+| Hosted CI for final head | verified | Run `40158851225` passed for exact `9ef2569` head |
 
 ## Unsupported guarantees
 
