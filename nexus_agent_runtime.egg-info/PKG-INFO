@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: nexus-agent-runtime
+Version: 1.0.0a1
+Summary: Single-host durable workflow runtime with operator controls
+Requires-Python: <3.13,>=3.12
+Provides-Extra: test
+Requires-Dist: pytest<10,>=8; extra == "test"

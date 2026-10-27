@@ -24,8 +24,12 @@ class SecretResolver:
             value = self.env.get(name)
         elif reference.startswith("file:"):
             name = reference[5:]
-            path = self.files.get(name, Path(name))
-            value = path.read_text(encoding="utf-8").rstrip("\r\n") if path.is_file() else None
+            identifier(name, "file secret name")
+            path = self.files.get(name)
+            try:
+                value = path.read_text(encoding="utf-8").rstrip("\r\n") if path is not None else None
+            except OSError:
+                value = None
         else:
             raise InvalidSpec("secret must be an env: or file: reference")
         if not value:

@@ -81,6 +81,11 @@ def test_secret_references_and_redaction(tmp_path):
     resolver = SecretResolver(env={"TOKEN": "env-secret"}, files={"prod": secret_file})
     assert resolver.resolve("env:TOKEN") == "env-secret"
     assert resolver.resolve("file:prod") == "file-secret"
+    with pytest.raises(Exception):
+        resolver.resolve(f"file:{secret_file}")
+    with pytest.raises(Exception) as exc:
+        resolver.resolve("file:missing")
+    assert getattr(exc.value, "code", None) == "SECRET_UNAVAILABLE"
     text = redact("Authorization: Bearer env-secret", ["env-secret"])
     assert "env-secret" not in text
     assert "REDACTED" in text
