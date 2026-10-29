@@ -2,13 +2,13 @@
 
 **Document audited:** `Nexus Investor White Paper`, October 18, 2026, technical baseline 1.4.240.
 
-**Audit conclusion:** The white paper’s 370-test result is supported by a preserved v1.4.240 archive and its validation logs, but it cannot be attributed to an exact commit in the current Git repository. The current repository contains a different fresh-v1 line. The 370-test archive source and tests are not present on `main`, PR #5’s merged history, or PR #6’s completion branch.
+**Audit conclusion:** The white paper’s 370-test result is supported by a preserved v1.4.240 archive and its validation logs, but it cannot be attributed to an exact commit in the current Git repository. The current repository contains a different fresh-v1 line. The 370-test archive source and tests are not present on merged `main` (`3ba7c029`), PR #5, PR #6, or PR #7.
 
 ## Provenance of the 370-test claim
 
 The preserved restoration audit identifies the source artifact as `nexus-v1.4.240-release.zip`, Drive file ID `1_H3ceS_gNZU-wX1_x7vVFrue7ByMRUAj`, with SHA-256 `63c2946d9bbdf049cb942605f3642ba477a20e475022b58a5b4a931e50c82613`. The audit records 17 runtime Python files, 33 test modules, and 370 discovered test methods. The same audit records the fresh source result as 370 tests passed in 57.039 seconds under Python 3.12.14, and the installed-wheel result as 369 passed plus one expected skip.
 
-The preserved unittest log ends with `Ran 370 tests in 57.039s` and `OK`. Its individual output contains 33 historical modules and 313 visible unittest method lines; the difference is consistent with parameterized/subtest expansion and is why the total must be taken from the runner summary rather than summing visible method names. The atomic fresh-v1 checkpoint is a different artifact: its `source-tests.xml` records only 76 tests on October 18, 2026.
+The preserved unittest log ends with `Ran 370 tests in 57.039s` and `OK`. Its inventory identifies 33 historical modules and 313 visible unittest method lines, but the available materials do not include a complete per-test inventory or a mechanism that reconciles those figures. Ordinary `unittest.subTest()` does not increase the runner’s test-case count, so the prior suggestion that subtests explain the difference is unsupported and has been removed. Generated test cases or another collection mechanism remain possible, but are unproven until the original archive and complete collection output are independently inspected. The atomic fresh-v1 checkpoint is a different artifact: its `source-tests.xml` records only 76 tests on October 18, 2026.
 
 No repository ref, tag, or commit in the available Git history contains the v1.4.240 source tree or the 33 historical test modules. The available `copilot/recoverv14240` branches contain preservation workflows and documentation, not the release source. Therefore the 370-test result is **archive-verified but commit-unattributed** in this repository.
 
@@ -23,7 +23,8 @@ No repository ref, tag, or commit in the available Git history contains the v1.4
 | Runtime recovery, leases, approvals, signals, backup/restore, worker limits, and telemetry are exercised | 33 historical modules listed below | Current analogues exist across `794e998`, `8043a6d`, `97974a9`, `326039e`, `b32de44`, `e9b86e8`, `3be4b90`, and `1370032`, but they are not the archived 370-test suite. | Partially reproduced on current branch; not equivalent evidence |
 | Malformed preflight auth mode defect reproduced | Restoration audit §“Reproduced defect”; proposed patch changes `nexus/preflight.py`, `tests/test_preflight.py`, and `pyproject.toml` | Current branch’s `nexus/preflight.py` was introduced at `1b85370`, but it is a different implementation and does not contain the historical `tests/test_preflight.py`. | Historical defect verified; current fix not equivalent |
 | Wheel integrity matched the checkpoint digest | Restoration audit records wheel SHA-256 `33fede...92b40e` | No current commit produces that archive wheel. Current branch has separate wheel builds from `1b85370` onward. | Archive-only artifact evidence |
-| Hosted CI and production readiness were not established | White paper explicitly says hosted CI, release integration, customer pilots, security audit, SLA, and large-scale production were not established | Current PR #6 is still draft; its hosted checks are separate from the October 18 archive. | Correct limitation |
+| Hosted CI and production readiness were not established | White paper explicitly says hosted CI, release integration, customer pilots, security audit, SLA, and large-scale production were not established | PR #6 and PR #7 are now merged; exact merged `main` commit `3ba7c029` passed hosted CI for PR #7. This does not establish customer pilots, security audit, SLA, or production readiness. | Hosted CI verified for merged head; production readiness remains unestablished |
+| Current merged-main validation | External evidence directory: `VALIDATION.log`, JUnit XML, and `SHA256SUMS` | Exact commit `3ba7c0293360da8af682f00c646c3c6a2091e542`: 115 passed, 9 deprecation warnings, compileall passed, pip check passed, diff check passed. | Reproduced locally; not evidence for the historical 370-test claim |
 
 ## Historical 33-module inventory and current mapping
 
@@ -45,7 +46,7 @@ The following table maps every historical test module named in the 370-test log 
 | `test_graceful_shutdown` | 7 | Signal shutdown, request capacity, timeouts, cleanup | No current equivalent | Archive-only |
 | `test_http_telemetry` | 2 | Bounded HTTP telemetry and log redaction | `tests/test_api.py`, `e9b86e8`, partial | Not equivalent |
 | `test_lease_heartbeat` | 10 | Lease renewal, takeover, process death, long actions | `tests/test_engine.py`, `df21e7f`; `tests/test_qualification.py`, `97663df` | Core current equivalent, narrower scope |
-| `test_migration_rehearsal` | 9 | Version migration, backup, rollback, injected failure | No current equivalent | Archive-only; major current gap |
+| `test_migration_rehearsal` | 9 | Version migration, backup, rollback, injected failure | `tests/test_migrations.py`, `df248b7`, merged through `3ba7c029` | Current narrower equivalent; broader archive scope is not equivalent |
 | `test_operator_auth` | 8 | Auth files, permissions, principal validation | `tests/test_api.py`, `2b87426`, partial | Not equivalent |
 | `test_platform_qualification` | 11 | Linux/service/platform/credential isolation | `tests/test_isolated_profile.py`, `3be4b90`; process/network additions at `dfedfcb` | Narrow current equivalent |
 | `test_preflight` | 8 | Typed preflight config, auth files, no-network checks | Current `nexus/preflight.py` and `tests/test_cli.py`, `1b85370` | Different implementation; not equivalent |
@@ -54,7 +55,7 @@ The following table maps every historical test module named in the 370-test log 
 | `test_resources` | 4 | Resource snapshots and bounded metrics | `tests/test_isolated_profile.py`, `3be4b90` | Narrow current equivalent |
 | `test_retention` | 5 | Retention/pruning and protected history | No current equivalent | Archive-only |
 | `test_retention_qualification` | 4 | Retention qualification workspace safety | No current equivalent | Archive-only |
-| `test_runtime` | 48 | Main runtime: capabilities, memory, budgets, delegation, command workers, schedules, migration | Current core split across `tests/test_runtime.py`, `794e998`, plus `1370032` and `7835dc0` extension tests | Not equivalent; current extensions are not fully Engine-integrated |
+| `test_runtime` | 48 | Main runtime: capabilities, memory, budgets, delegation, command workers, schedules, migration | Current core split across `tests/test_runtime.py`, `794e998`, plus `1370032`, `7835dc0`, and `df248b7` migration/capability work | Not equivalent; current extensions are not fully Engine-integrated |
 | `test_runtime_metrics` | 5 | Durable runtime metrics aggregation | Current `tests/test_control_extensions.py`, `1370032`, only in-process telemetry | Not equivalent |
 | `test_scheduler_telemetry` | 24 | Scheduler lifecycle and outcome telemetry | No current equivalent | Archive-only |
 | `test_server_credentials` | 4 | Owner-only credential files and source selection | No current equivalent | Archive-only |
@@ -84,7 +85,8 @@ These are the exact current repository commits that implement the closest fresh-
 - `1b85370` — operational CLI, preflight, offline demo, and `tests/test_cli.py`.
 - `1370032` — standalone capability, memory, budget, secret, and telemetry brokers with `tests/test_control_extensions.py`.
 - `7835dc0` — durable parent-child delegation link primitives.
+- `df248b7` — transactional v1-to-v2 schema migration, authentic fixture, and rollback qualification; merged in `3ba7c029`.
 
 ## Bottom line
 
-The white paper’s 370-test claim is a valid statement about the preserved v1.4.240 archive and its local validation record, subject to the archive’s stated limitations. It is not a claim that can be attached to a current Git commit in this repository. The current repository has a separate fresh-v1 history with materially fewer and differently organized tests. The correct release documentation must preserve both facts and must not use the historical 370 count as current-head evidence.
+The white paper’s 370-test claim is a statement about the preserved v1.4.240 archive and its recorded validation log, subject to the unresolved 313-versus-370 inventory discrepancy. It is not a claim that can be attached to a current Git commit in this repository. The current merged `main` commit `3ba7c029` independently reproduces 115 current tests; that count is not comparable to, and must not be presented as, the historical 370 count. The correct release documentation must preserve both facts and must not use either count as evidence for the other.
