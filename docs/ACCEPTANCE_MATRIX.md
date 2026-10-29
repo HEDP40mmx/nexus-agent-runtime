@@ -1,6 +1,6 @@
 # Nexus acceptance matrix
 
-Updated for feature branch head `df248b7` on 2026-10-25. Local Python 3.12 suite: 115 passed; transactional v1-to-v2 migration, rollback injection, clean-launch, isolated-profile, CPU/memory/file/process-limit validation, network-deny configuration, cancellation, compilation, and `pip check` checks passed. Generated delivery ZIPs remain untracked and are not part of the implementation commit.
+Updated for merged `main` head `3ba7c029` on 2026-10-29. Exact merged-tree validation: 115 passed; transactional v1-to-v2 migration, rollback injection, clean-launch, isolated-profile, CPU/memory/file/process-limit validation, network-deny configuration, cancellation, compilation, `pip check`, and `git diff --check` passed. Independent wheel and sdist installs also passed outside the checkout, including schema/migration presence and offline demo execution.
 
 | Gate | Status | Evidence or remaining gap |
 |---|---|---|
@@ -29,10 +29,10 @@ Updated for feature branch head `df248b7` on 2026-10-25. Local Python 3.12 suite
 | HTTP TLS and external/public deployment security | not implemented | Must remain localhost-only or sit behind a properly secured TLS reverse proxy |
 | Full CLI worker/serve/preflight/demo | partially implemented | Existing CLI; worker/serve/demo/preflight completeness remains |
 | Online backup and fresh restore | implemented and tested locally | Existing backup tests; broader concurrent-write rehearsal remains |
-| Packaging and installed-package qualification | implemented and tested locally | Fresh wheel/sdist build and outside-checkout schema/import smoke passed |
+| Packaging and installed-package qualification | implemented and tested locally | Exact main `3ba7c029`; separate fresh wheel/sdist environments outside checkout passed schema/import, CLI version, offline demo, and `pip check`; artifact hashes recorded in external `SHA256SUMS-packaging` |
 | Delegation, memory, capabilities, budgets, secrets, telemetry | not implemented | Product slices remain |
 | Full X01-X16 / 31+16 gates | not complete | Several product and deployment gates remain |
-| Hosted CI for final head | not rerun | Prior run `40158851225` passed for `9ef2569`; migration head `df248b7` still needs hosted CI evidence |
+| Hosted CI for final head | verified for merged PR head | PR #7 CI passed before merge; merge commit is `3ba7c029`. Local exact-merge validation is recorded separately from hosted CI. |
 
 ## Unsupported guarantees
 
